@@ -1,0 +1,22 @@
+# SpawnVerse runtime
+spawnverse.db
+sv_vectordb*/
+.spawnverse_agents/
+spawnverse_data.db
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# Env
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+.DS_Store

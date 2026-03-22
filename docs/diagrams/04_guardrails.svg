@@ -1,0 +1,108 @@
+<svg viewBox="0 0 960 560" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <linearGradient id="bgg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/><stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <linearGradient id="L1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7f1d1d"/><stop offset="100%" stop-color="#991b1b"/>
+    </linearGradient>
+    <linearGradient id="L2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#78350f"/><stop offset="100%" stop-color="#92400e"/>
+    </linearGradient>
+    <linearGradient id="L3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#065f46"/><stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="L4" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1e1b4b"/><stop offset="100%" stop-color="#312e81"/>
+    </linearGradient>
+    <filter id="drop4">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+    <marker id="gArr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#475569"/>
+    </marker>
+    <marker id="gArrR" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#ef4444"/>
+    </marker>
+    <marker id="gArrG" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <rect width="960" height="560" fill="url(#bgg)" rx="18"/>
+  <rect x="1" y="1" width="958" height="558" fill="none" stroke="#21262d" stroke-width="1.5" rx="18"/>
+
+  <!-- Title -->
+  <text x="480" y="42" text-anchor="middle" fill="#f0f6fc" font-size="21" font-weight="800">GUARDRAIL SYSTEM — 4 LAYERS</text>
+  <text x="480" y="64" text-anchor="middle" fill="#8b949e" font-size="12">Independent safety checks applied at different points in the agent lifecycle</text>
+  <line x1="160" y1="76" x2="800" y2="76" stroke="#30363d" stroke-width="1"/>
+
+  <!-- Entry -->
+  <rect x="360" y="86" width="240" height="38" rx="19" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <text x="480" y="110" text-anchor="middle" fill="#e6edf3" font-size="12">LLM generates agent code</text>
+  <line x1="480" y1="124" x2="480" y2="146" stroke="#475569" stroke-width="2" marker-end="url(#gArr)"/>
+
+  <!-- LAYER 1 -->
+  <rect x="80" y="148" width="800" height="86" rx="12" fill="url(#L1)" filter="url(#drop4)"/>
+  <rect x="80" y="148" width="130" height="86" rx="12" fill="#dc2626"/>
+  <rect x="196" y="148" width="14" height="86" fill="#dc2626"/>
+  <text x="144" y="188" text-anchor="middle" fill="#fff" font-size="20">🛡</text>
+  <text x="144" y="210" text-anchor="middle" fill="#fecaca" font-size="10" font-weight="800">LAYER 1</text>
+  <text x="144" y="225" text-anchor="middle" fill="#fca5a5" font-size="9">CODE SCAN</text>
+  <text x="540" y="174" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">Code Scanner  (before subprocess starts)</text>
+  <text x="540" y="194" text-anchor="middle" fill="#fca5a5" font-size="10">Blocks: os.system · subprocess · __import__ · eval · exec</text>
+  <text x="540" y="210" text-anchor="middle" fill="#fca5a5" font-size="10">Blocks: open("/etc/...") · socket.* · requests.post · os.environ</text>
+  <text x="540" y="226" text-anchor="middle" fill="#fecaca" font-size="9">Agent file is NEVER written to disk if violation found. Orchestrator retries.</text>
+
+  <!-- BLOCKED label -->
+  <rect x="820" y="168" width="110" height="46" rx="6" fill="#1c0a0a" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="875" y="187" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="800">✗ BLOCKED</text>
+  <text x="875" y="204" text-anchor="middle" fill="#f87171" font-size="8">retry prompt</text>
+
+  <line x1="480" y1="234" x2="480" y2="256" stroke="#475569" stroke-width="2" marker-end="url(#gArr)"/>
+  <text x="530" y="248" fill="#475569" font-size="9">passed code scan</text>
+
+  <!-- LAYER 2 -->
+  <rect x="80" y="258" width="800" height="72" rx="12" fill="url(#L2)" filter="url(#drop4)"/>
+  <rect x="80" y="258" width="130" height="72" rx="12" fill="#d97706"/>
+  <rect x="196" y="258" width="14" height="72" fill="#d97706"/>
+  <text x="144" y="294" text-anchor="middle" fill="#fff" font-size="20">⚡</text>
+  <text x="144" y="314" text-anchor="middle" fill="#fde68a" font-size="10" font-weight="800">LAYER 2</text>
+  <text x="144" y="325" text-anchor="middle" fill="#fcd34d" font-size="9">BUDGET</text>
+  <text x="540" y="282" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">Budget Enforcer  (during LLM calls inside agent)</text>
+  <text x="540" y="302" text-anchor="middle" fill="#fcd34d" font-size="10">per_agent_tokens limit tracked per think() call</text>
+  <text x="540" y="320" text-anchor="middle" fill="#fde68a" font-size="9">When exhausted: think() returns empty · agent continues but cannot call LLM again</text>
+
+  <line x1="480" y1="330" x2="480" y2="352" stroke="#475569" stroke-width="2" marker-end="url(#gArr)"/>
+  <text x="530" y="344" fill="#475569" font-size="9">agent subprocess completes</text>
+
+  <!-- LAYER 3 -->
+  <rect x="80" y="354" width="800" height="72" rx="12" fill="url(#L3)" filter="url(#drop4)"/>
+  <rect x="80" y="354" width="130" height="72" rx="12" fill="#059669"/>
+  <rect x="196" y="354" width="14" height="72" fill="#059669"/>
+  <text x="144" y="390" text-anchor="middle" fill="#fff" font-size="20">✓</text>
+  <text x="144" y="410" text-anchor="middle" fill="#a7f3d0" font-size="10" font-weight="800">LAYER 3</text>
+  <text x="144" y="421" text-anchor="middle" fill="#6ee7b7" font-size="9">OUTPUT</text>
+  <text x="540" y="378" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">Output Validator  (before memory write)</text>
+  <text x="540" y="398" text-anchor="middle" fill="#a7f3d0" font-size="10">Not None  ·  Not empty (&lt;10 chars)  ·  Not oversized (&gt;50KB)  ·  Not empty dict</text>
+  <text x="540" y="416" text-anchor="middle" fill="#6ee7b7" font-size="9">If blocked: result never enters shared memory · downstream agents cannot read it</text>
+
+  <line x1="480" y1="426" x2="480" y2="448" stroke="#475569" stroke-width="2" marker-end="url(#gArr)"/>
+  <text x="530" y="440" fill="#475569" font-size="9">output structure valid</text>
+
+  <!-- LAYER 4 -->
+  <rect x="80" y="450" width="800" height="72" rx="12" fill="url(#L4)" filter="url(#drop4)"/>
+  <rect x="80" y="450" width="130" height="72" rx="12" fill="#4f46e5"/>
+  <rect x="196" y="450" width="14" height="72" fill="#4f46e5"/>
+  <text x="144" y="486" text-anchor="middle" fill="#fff" font-size="20">🧠</text>
+  <text x="144" y="506" text-anchor="middle" fill="#c7d2fe" font-size="10" font-weight="800">LAYER 4</text>
+  <text x="144" y="517" text-anchor="middle" fill="#a5b4fc" font-size="9">SEMANTIC</text>
+  <text x="540" y="474" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">Semantic Guardrail  (LLM-as-judge)</text>
+  <text x="540" y="494" text-anchor="middle" fill="#c7d2fe" font-size="10">Flags: personal data · harmful instructions · misinformation · off-task · prompt injection</text>
+  <text x="540" y="512" text-anchor="middle" fill="#a5b4fc" font-size="9">If flagged: output blocked from shared memory · logged in guardrail_log table</text>
+
+  <!-- Final arrow + SAFE -->
+  <line x1="480" y1="522" x2="480" y2="542" stroke="#10b981" stroke-width="2" marker-end="url(#gArrG)"/>
+  <rect x="360" y="542" width="240" height="14" rx="7" fill="#022c1a" stroke="#10b981" stroke-width="1.5"/>
+  <text x="480" y="553" text-anchor="middle" fill="#10b981" font-size="9" font-weight="800">✓ SAFE — enters shared memory</text>
+</svg>

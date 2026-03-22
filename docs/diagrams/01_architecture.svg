@@ -1,0 +1,171 @@
+<svg viewBox="0 0 960 680" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <linearGradient id="gOrch" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#4f46e5"/>
+    </linearGradient>
+    <linearGradient id="gAgent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#0369a1"/>
+    </linearGradient>
+    <linearGradient id="gMem" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="gSynth" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="gGuard" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#dc2626"/>
+      <stop offset="100%" stop-color="#b91c1c"/>
+    </linearGradient>
+    <linearGradient id="gFossil" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#d97706"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <filter id="drop">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#475569"/>
+    </marker>
+    <marker id="arrG" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#10b981"/>
+    </marker>
+    <marker id="arrP" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrY" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#fbbf24"/>
+    </marker>
+  </defs>
+
+  <!-- BG -->
+  <rect width="960" height="680" fill="url(#bg)" rx="18"/>
+  <rect x="1" y="1" width="958" height="678" fill="none" stroke="#21262d" stroke-width="1.5" rx="18"/>
+
+  <!-- Header -->
+  <text x="480" y="42" text-anchor="middle" fill="#f0f6fc" font-size="22" font-weight="800" letter-spacing="1.5">SPAWNVERSE</text>
+  <text x="480" y="64" text-anchor="middle" fill="#8b949e" font-size="12">Self-Spawning Cognitive Agent Architecture</text>
+  <line x1="200" y1="76" x2="760" y2="76" stroke="#30363d" stroke-width="1"/>
+
+  <!-- USER -->
+  <rect x="380" y="88" width="200" height="46" rx="23" fill="#161b22" stroke="#30363d" stroke-width="1.5" filter="url(#drop)"/>
+  <text x="480" y="107" text-anchor="middle" fill="#8b949e" font-size="10" font-weight="700">YOU</text>
+  <text x="480" y="124" text-anchor="middle" fill="#e6edf3" font-size="10">"Plan Tokyo trip, 2 people, INR 2L"</text>
+
+  <!-- Arrow user → orch -->
+  <line x1="480" y1="134" x2="480" y2="158" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ORCHESTRATOR -->
+  <rect x="240" y="160" width="480" height="70" rx="12" fill="url(#gOrch)" filter="url(#drop)"/>
+  <text x="480" y="185" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" letter-spacing="0.5">ORCHESTRATOR</text>
+  <text x="480" y="205" text-anchor="middle" fill="#c4b5fd" font-size="11">Decomposes task  ·  Plans agent team  ·  Manages lifecycle</text>
+  <text x="480" y="222" text-anchor="middle" fill="#a78bfa" font-size="10">The only entity that exists before the task arrives</text>
+
+  <!-- Arrow orch → wave1 -->
+  <line x1="480" y1="230" x2="480" y2="254" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="492" y="246" fill="#8b949e" font-size="9">LLM writes code for each agent</text>
+
+  <!-- WAVE 1 TAG -->
+  <rect x="20" y="256" width="180" height="22" rx="6" fill="#0c1929" stroke="#1d4ed8" stroke-width="1.5"/>
+  <text x="110" y="271" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="800">⚡ WAVE 1 — PARALLEL GATHERING</text>
+
+  <!-- 4 Agent boxes -->
+  <!-- Agent 1 -->
+  <rect x="20" y="284" width="200" height="82" rx="10" fill="url(#gAgent)" filter="url(#drop)"/>
+  <text x="120" y="306" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">flight_researcher</text>
+  <line x1="40" y1="312" x2="200" y2="312" stroke="#0ea5e9" stroke-width="0.5" stroke-dasharray="3,2"/>
+  <text x="120" y="327" text-anchor="middle" fill="#bae6fd" font-size="9">Invented at runtime</text>
+  <text x="120" y="341" text-anchor="middle" fill="#7dd3fc" font-size="9">LLM wrote my code</text>
+  <text x="120" y="355" text-anchor="middle" fill="#e0f2fe" font-size="9">subprocess + OS sandbox</text>
+
+  <!-- Agent 2 -->
+  <rect x="240" y="284" width="200" height="82" rx="10" fill="url(#gAgent)" filter="url(#drop)"/>
+  <text x="340" y="306" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">hotel_finder</text>
+  <line x1="260" y1="312" x2="420" y2="312" stroke="#0ea5e9" stroke-width="0.5" stroke-dasharray="3,2"/>
+  <text x="340" y="327" text-anchor="middle" fill="#bae6fd" font-size="9">Invented at runtime</text>
+  <text x="340" y="341" text-anchor="middle" fill="#7dd3fc" font-size="9">LLM wrote my code</text>
+  <text x="340" y="355" text-anchor="middle" fill="#e0f2fe" font-size="9">subprocess + OS sandbox</text>
+
+  <!-- Agent 3 -->
+  <rect x="460" y="284" width="200" height="82" rx="10" fill="url(#gAgent)" filter="url(#drop)"/>
+  <text x="560" y="306" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">weather_agent</text>
+  <line x1="480" y1="312" x2="640" y2="312" stroke="#0ea5e9" stroke-width="0.5" stroke-dasharray="3,2"/>
+  <text x="560" y="327" text-anchor="middle" fill="#bae6fd" font-size="9">Invented at runtime</text>
+  <text x="560" y="341" text-anchor="middle" fill="#7dd3fc" font-size="9">LLM wrote my code</text>
+  <text x="560" y="355" text-anchor="middle" fill="#e0f2fe" font-size="9">subprocess + OS sandbox</text>
+
+  <!-- Agent 4 -->
+  <rect x="680" y="284" width="200" height="82" rx="10" fill="url(#gAgent)" filter="url(#drop)"/>
+  <text x="780" y="306" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">budget_agent</text>
+  <line x1="700" y1="312" x2="860" y2="312" stroke="#0ea5e9" stroke-width="0.5" stroke-dasharray="3,2"/>
+  <text x="780" y="327" text-anchor="middle" fill="#bae6fd" font-size="9">Invented at runtime</text>
+  <text x="780" y="341" text-anchor="middle" fill="#7dd3fc" font-size="9">LLM wrote my code</text>
+  <text x="780" y="355" text-anchor="middle" fill="#e0f2fe" font-size="9">subprocess + OS sandbox</text>
+
+  <!-- Arrows agents → memory -->
+  <line x1="120" y1="366" x2="120" y2="398" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrG)"/>
+  <line x1="340" y1="366" x2="340" y2="398" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrG)"/>
+  <line x1="560" y1="366" x2="560" y2="398" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrG)"/>
+  <line x1="780" y1="366" x2="780" y2="398" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrG)"/>
+  <text x="210" y="386" fill="#10b981" font-size="8">write own namespace</text>
+  <text x="600" y="386" fill="#10b981" font-size="8">write own namespace</text>
+
+  <!-- DISTRIBUTED MEMORY -->
+  <rect x="20" y="400" width="920" height="64" rx="12" fill="url(#gMem)" filter="url(#drop)"/>
+  <text x="480" y="425" text-anchor="middle" fill="#fff" font-size="14" font-weight="800">DISTRIBUTED MEMORY  ·  SQLite WAL  ·  Concurrent-Safe</text>
+  <text x="240" y="451" text-anchor="middle" fill="#a7f3d0" font-size="11">READ: any agent reads any namespace</text>
+  <text x="720" y="451" text-anchor="middle" fill="#fde68a" font-size="11">WRITE: only to own namespace</text>
+  <line x1="480" y1="408" x2="480" y2="464" stroke="#34d399" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- WAVE 2 TAG -->
+  <rect x="20" y="468" width="160" height="22" rx="6" fill="#1a0a3d" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="100" y="483" text-anchor="middle" fill="#c4b5fd" font-size="9" font-weight="800">⚡ WAVE 2 — SYNTHESIS</text>
+
+  <!-- Arrow memory → wave2 -->
+  <line x1="480" y1="464" x2="480" y2="492" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="492" y="482" fill="#8b949e" font-size="8">reads Wave 1 outputs</text>
+
+  <!-- Synthesis agents -->
+  <rect x="200" y="494" width="240" height="54" rx="10" fill="url(#gSynth)" filter="url(#drop)"/>
+  <text x="320" y="517" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">itinerary_builder</text>
+  <text x="320" y="534" text-anchor="middle" fill="#c4b5fd" font-size="9">reads all Wave 1 outputs · synthesizes</text>
+
+  <rect x="480" y="494" width="240" height="54" rx="10" fill="url(#gSynth)" filter="url(#drop)"/>
+  <text x="600" y="517" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">final_report_agent</text>
+  <text x="600" y="534" text-anchor="middle" fill="#c4b5fd" font-size="9">compiles complete output · scores</text>
+
+  <!-- Arrows → bottom layer -->
+  <line x1="320" y1="548" x2="320" y2="580" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrY)"/>
+  <line x1="600" y1="548" x2="600" y2="580" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrY)"/>
+
+  <!-- BOTTOM ROW -->
+  <rect x="20" y="582" width="220" height="52" rx="8" fill="#1c1407" stroke="#d97706" stroke-width="1.5" filter="url(#drop)"/>
+  <text x="130" y="602" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="800">🦴  FOSSIL RECORD</text>
+  <text x="130" y="622" text-anchor="middle" fill="#fcd34d" font-size="9">constitution · quality · drift score</text>
+
+  <rect x="260" y="582" width="220" height="52" rx="8" fill="url(#gGuard)" filter="url(#drop)"/>
+  <text x="370" y="602" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">🛡  GUARDRAILS  ×4</text>
+  <text x="370" y="622" text-anchor="middle" fill="#fca5a5" font-size="9">code scan · budget · output · semantic</text>
+
+  <rect x="500" y="582" width="220" height="52" rx="8" fill="#0a2818" stroke="#10b981" stroke-width="1.5" filter="url(#drop)"/>
+  <text x="610" y="602" text-anchor="middle" fill="#34d399" font-size="11" font-weight="800">📊  QUALITY SCORES</text>
+  <text x="610" y="622" text-anchor="middle" fill="#6ee7b7" font-size="9">intent drift · quality · token spend</text>
+
+  <rect x="740" y="582" width="200" height="52" rx="8" fill="#0c1a2e" stroke="#3b82f6" stroke-width="1.5" filter="url(#drop)"/>
+  <text x="840" y="602" text-anchor="middle" fill="#60a5fa" font-size="11" font-weight="800">⚡  VECTOR DB</text>
+  <text x="840" y="622" text-anchor="middle" fill="#bfdbfe" font-size="9">ChromaDB · RAG · fossil search</text>
+
+  <!-- Footer -->
+  <text x="480" y="656" text-anchor="middle" fill="#30363d" font-size="9">github.com/YOUR_USERNAME/spawnverse</text>
+</svg>

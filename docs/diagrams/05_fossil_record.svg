@@ -1,0 +1,143 @@
+<svg viewBox="0 0 960 520" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <linearGradient id="bgf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/><stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <linearGradient id="fRun1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e3a5f"/><stop offset="100%" stop-color="#1e40af"/>
+    </linearGradient>
+    <linearGradient id="fRun2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#065f46"/><stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="fRun3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4c1d95"/><stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="fFossil" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#78350f"/><stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <filter id="drop5">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+    <marker id="fArr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#475569"/>
+    </marker>
+    <marker id="fArrY" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#fbbf24"/>
+    </marker>
+    <marker id="fArrG" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#10b981"/>
+    </marker>
+    <marker id="fArrP" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#a78bfa"/>
+    </marker>
+  </defs>
+
+  <rect width="960" height="520" fill="url(#bgf)" rx="18"/>
+  <rect x="1" y="1" width="958" height="518" fill="none" stroke="#21262d" stroke-width="1.5" rx="18"/>
+
+  <!-- Title -->
+  <text x="480" y="42" text-anchor="middle" fill="#f0f6fc" font-size="21" font-weight="800">🦴  FOSSIL RECORD — LONG MEMORY</text>
+  <text x="480" y="64" text-anchor="middle" fill="#8b949e" font-size="12">Every dead agent leaves a fossil · Future runs get smarter from past runs</text>
+  <line x1="160" y1="76" x2="800" y2="76" stroke="#30363d" stroke-width="1"/>
+
+  <!-- RUN 1 -->
+  <rect x="30" y="90" width="260" height="240" rx="12" fill="url(#fRun1)" stroke="#3b82f6" stroke-width="1.5" filter="url(#drop5)"/>
+  <text x="160" y="114" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">RUN 1</text>
+  <text x="160" y="132" text-anchor="middle" fill="#93c5fd" font-size="10">Starting from scratch</text>
+
+  <rect x="46" y="142" width="228" height="36" rx="6" fill="#1e3a8a"/>
+  <text x="160" y="158" text-anchor="middle" fill="#bfdbfe" font-size="10" font-weight="700">flight_agent</text>
+  <text x="160" y="172" text-anchor="middle" fill="#93c5fd" font-size="9">quality=0.71  drift=0.83</text>
+
+  <rect x="46" y="184" width="228" height="36" rx="6" fill="#1e3a8a"/>
+  <text x="160" y="200" text-anchor="middle" fill="#bfdbfe" font-size="10" font-weight="700">hotel_agent</text>
+  <text x="160" y="214" text-anchor="middle" fill="#93c5fd" font-size="9">quality=0.68  drift=0.79</text>
+
+  <rect x="46" y="226" width="228" height="36" rx="6" fill="#1e3a8a"/>
+  <text x="160" y="242" text-anchor="middle" fill="#bfdbfe" font-size="10" font-weight="700">itinerary_builder</text>
+  <text x="160" y="256" text-anchor="middle" fill="#93c5fd" font-size="9">quality=0.63  drift=0.77</text>
+
+  <text x="160" y="300" text-anchor="middle" fill="#60a5fa" font-size="10">Each agent deposits fossil on death</text>
+  <text x="160" y="316" text-anchor="middle" fill="#93c5fd" font-size="9">constitution · quality · drift · tokens</text>
+
+  <!-- RUN 10 -->
+  <rect x="350" y="90" width="260" height="240" rx="12" fill="url(#fRun2)" stroke="#10b981" stroke-width="1.5" filter="url(#drop5)"/>
+  <text x="480" y="114" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">RUN 10</text>
+  <text x="480" y="132" text-anchor="middle" fill="#a7f3d0" font-size="10">9 runs of fossil knowledge</text>
+
+  <rect x="366" y="142" width="228" height="36" rx="6" fill="#064e3b"/>
+  <text x="480" y="158" text-anchor="middle" fill="#a7f3d0" font-size="10" font-weight="700">flight_agent</text>
+  <text x="480" y="172" text-anchor="middle" fill="#6ee7b7" font-size="9">quality=0.81  drift=0.89  ↑improved</text>
+
+  <rect x="366" y="184" width="228" height="36" rx="6" fill="#064e3b"/>
+  <text x="480" y="200" text-anchor="middle" fill="#a7f3d0" font-size="10" font-weight="700">hotel_agent</text>
+  <text x="480" y="214" text-anchor="middle" fill="#6ee7b7" font-size="9">quality=0.79  drift=0.86  ↑improved</text>
+
+  <rect x="366" y="226" width="228" height="36" rx="6" fill="#064e3b"/>
+  <text x="480" y="242" text-anchor="middle" fill="#a7f3d0" font-size="10" font-weight="700">itinerary_builder</text>
+  <text x="480" y="256" text-anchor="middle" fill="#6ee7b7" font-size="9">quality=0.84  drift=0.91  ↑improved</text>
+
+  <text x="480" y="295" text-anchor="middle" fill="#34d399" font-size="10">Agents search fossil collection</text>
+  <text x="480" y="311" text-anchor="middle" fill="#6ee7b7" font-size="9">rag_context(query, collection='fossils')</text>
+
+  <!-- RUN 100 -->
+  <rect x="670" y="90" width="260" height="240" rx="12" fill="url(#fRun3)" stroke="#8b5cf6" stroke-width="1.5" filter="url(#drop5)"/>
+  <text x="800" y="114" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">RUN 100</text>
+  <text x="800" y="132" text-anchor="middle" fill="#c4b5fd" font-size="10">Rich fossil library accumulated</text>
+
+  <rect x="686" y="142" width="228" height="36" rx="6" fill="#3b0764"/>
+  <text x="800" y="158" text-anchor="middle" fill="#e9d5ff" font-size="10" font-weight="700">flight_agent</text>
+  <text x="800" y="172" text-anchor="middle" fill="#c4b5fd" font-size="9">quality=0.92  drift=0.95  ★ canonical</text>
+
+  <rect x="686" y="184" width="228" height="36" rx="6" fill="#3b0764"/>
+  <text x="800" y="200" text-anchor="middle" fill="#e9d5ff" font-size="10" font-weight="700">hotel_agent</text>
+  <text x="800" y="214" text-anchor="middle" fill="#c4b5fd" font-size="9">quality=0.90  drift=0.93  ★ canonical</text>
+
+  <rect x="686" y="226" width="228" height="36" rx="6" fill="#3b0764"/>
+  <text x="800" y="242" text-anchor="middle" fill="#e9d5ff" font-size="10" font-weight="700">itinerary_builder</text>
+  <text x="800" y="256" text-anchor="middle" fill="#c4b5fd" font-size="9">quality=0.94  drift=0.96  ★ canonical</text>
+
+  <text x="800" y="295" text-anchor="middle" fill="#a78bfa" font-size="10">Proven constitutions reused</text>
+  <text x="800" y="311" text-anchor="middle" fill="#c4b5fd" font-size="9">No LLM call needed for known tasks</text>
+
+  <!-- Arrows between runs -->
+  <line x1="292" y1="210" x2="348" y2="210" stroke="#fbbf24" stroke-width="2" marker-end="url(#fArrY)"/>
+  <text x="320" y="202" text-anchor="middle" fill="#fbbf24" font-size="8">fossils</text>
+  <text x="320" y="222" text-anchor="middle" fill="#fbbf24" font-size="8">feed</text>
+
+  <line x1="612" y1="210" x2="668" y2="210" stroke="#fbbf24" stroke-width="2" marker-end="url(#fArrY)"/>
+  <text x="640" y="202" text-anchor="middle" fill="#fbbf24" font-size="8">fossils</text>
+  <text x="640" y="222" text-anchor="middle" fill="#fbbf24" font-size="8">feed</text>
+
+  <!-- FOSSIL ANATOMY BOX -->
+  <rect x="30" y="348" width="900" height="140" rx="12" fill="url(#fFossil)" filter="url(#drop5)"/>
+  <text x="480" y="374" text-anchor="middle" fill="#fff" font-size="14" font-weight="800">🦴  WHAT EVERY FOSSIL CONTAINS</text>
+
+  <rect x="50" y="386" width="190" height="86" rx="8" fill="#1c0a04"/>
+  <text x="145" y="405" text-anchor="middle" fill="#fcd34d" font-size="10" font-weight="700">IDENTITY</text>
+  <text x="145" y="422" text-anchor="middle" fill="#fde68a" font-size="9">agent_id</text>
+  <text x="145" y="437" text-anchor="middle" fill="#fde68a" font-size="9">role</text>
+  <text x="145" y="452" text-anchor="middle" fill="#fde68a" font-size="9">task_summary</text>
+  <text x="145" y="467" text-anchor="middle" fill="#fde68a" font-size="9">depth</text>
+
+  <rect x="260" y="386" width="190" height="86" rx="8" fill="#1c0a04"/>
+  <text x="355" y="405" text-anchor="middle" fill="#fcd34d" font-size="10" font-weight="700">CONSTITUTION</text>
+  <text x="355" y="422" text-anchor="middle" fill="#fde68a" font-size="9">The Python code that</text>
+  <text x="355" y="437" text-anchor="middle" fill="#fde68a" font-size="9">defined this agent</text>
+  <text x="355" y="452" text-anchor="middle" fill="#fde68a" font-size="9">First 2000 chars stored</text>
+  <text x="355" y="467" text-anchor="middle" fill="#fbbf24" font-size="9">searchable via ChromaDB</text>
+
+  <rect x="470" y="386" width="190" height="86" rx="8" fill="#1c0a04"/>
+  <text x="565" y="405" text-anchor="middle" fill="#fcd34d" font-size="10" font-weight="700">SCORES</text>
+  <text x="565" y="422" text-anchor="middle" fill="#fde68a" font-size="9">quality_score  0.0–1.0</text>
+  <text x="565" y="437" text-anchor="middle" fill="#fde68a" font-size="9">intent_score   0.0–1.0</text>
+  <text x="565" y="452" text-anchor="middle" fill="#fde68a" font-size="9">tokens_used</text>
+  <text x="565" y="467" text-anchor="middle" fill="#fde68a" font-size="9">runtime_seconds</text>
+
+  <rect x="680" y="386" width="230" height="86" rx="8" fill="#1c0a04"/>
+  <text x="795" y="405" text-anchor="middle" fill="#fcd34d" font-size="10" font-weight="700">FUTURE USE</text>
+  <text x="795" y="422" text-anchor="middle" fill="#fde68a" font-size="9">Soul system evolution</text>
+  <text x="795" y="437" text-anchor="middle" fill="#fde68a" font-size="9">Constitution library</text>
+  <text x="795" y="452" text-anchor="middle" fill="#fde68a" font-size="9">Fossil curator agent</text>
+  <text x="795" y="467" text-anchor="middle" fill="#fbbf24" font-size="9">Agentic Universe Phase 2</text>
+</svg>

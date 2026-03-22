@@ -1,0 +1,142 @@
+<svg viewBox="0 0 960 740" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/><stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <linearGradient id="step1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="step2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#dc2626"/><stop offset="100%" stop-color="#b91c1c"/>
+    </linearGradient>
+    <linearGradient id="step3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0284c7"/><stop offset="100%" stop-color="#0369a1"/>
+    </linearGradient>
+    <linearGradient id="step4" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#059669"/><stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="step5" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#d97706"/><stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <linearGradient id="step6" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#db2777"/><stop offset="100%" stop-color="#be185d"/>
+    </linearGradient>
+    <linearGradient id="step7" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0891b2"/><stop offset="100%" stop-color="#0e7490"/>
+    </linearGradient>
+    <linearGradient id="step8" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#4338ca"/>
+    </linearGradient>
+    <filter id="drop2">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+    <marker id="a1" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#475569"/>
+    </marker>
+    <marker id="a2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#ef4444"/>
+    </marker>
+    <marker id="a3" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <rect width="960" height="740" fill="url(#bg2)" rx="18"/>
+  <rect x="1" y="1" width="958" height="738" fill="none" stroke="#21262d" stroke-width="1.5" rx="18"/>
+
+  <!-- Title -->
+  <text x="480" y="42" text-anchor="middle" fill="#f0f6fc" font-size="21" font-weight="800" letter-spacing="1">AGENT LIFECYCLE FLOW</text>
+  <text x="480" y="64" text-anchor="middle" fill="#8b949e" font-size="12">From task description to fossil deposit — what happens to every agent</text>
+  <line x1="160" y1="76" x2="800" y2="76" stroke="#30363d" stroke-width="1"/>
+
+  <!-- Central spine line -->
+  <line x1="480" y1="90" x2="480" y2="710" stroke="#21262d" stroke-width="2" stroke-dasharray="6,4"/>
+
+  <!-- STEP 1: Task arrives -->
+  <rect x="260" y="90" width="440" height="58" rx="10" fill="url(#step1)" filter="url(#drop2)"/>
+  <text x="480" y="113" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">① TASK ARRIVES</text>
+  <text x="480" y="133" text-anchor="middle" fill="#c4b5fd" font-size="11">"Plan Tokyo trip, 2 people, INR 2L, October 2025"</text>
+  <text x="480" y="148" text-anchor="middle" fill="#a78bfa" font-size="10">Orchestrator reads task · LLM plans the agent team</text>
+
+  <!-- Arrow -->
+  <line x1="480" y1="148" x2="480" y2="170" stroke="#475569" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- STEP 2: LLM generates code -->
+  <rect x="260" y="172" width="440" height="68" rx="10" fill="url(#step3)" filter="url(#drop2)"/>
+  <text x="480" y="196" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">② LLM GENERATES AGENT CODE</text>
+  <text x="480" y="215" text-anchor="middle" fill="#bae6fd" font-size="10">Orchestrator asks LLM: "Write def main(): for flight_researcher"</text>
+  <text x="480" y="231" text-anchor="middle" fill="#7dd3fc" font-size="10">LLM returns Python code · Stdlib prepended · File assembled</text>
+
+  <!-- Annotation right -->
+  <rect x="730" y="182" width="190" height="50" rx="6" fill="#0c1929" stroke="#1d4ed8" stroke-width="1"/>
+  <text x="825" y="202" text-anchor="middle" fill="#93c5fd" font-size="9" font-weight="700">STDLIB INJECTED</text>
+  <text x="825" y="216" text-anchor="middle" fill="#60a5fa" font-size="8">read() write() think()</text>
+  <text x="825" y="228" text-anchor="middle" fill="#60a5fa" font-size="8">progress() spawn() done()</text>
+  <line x1="730" y1="207" x2="700" y2="207" stroke="#1d4ed8" stroke-width="1" marker-end="url(#a1)"/>
+
+  <line x1="480" y1="240" x2="480" y2="262" stroke="#475569" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- STEP 3: Guardrail scan -->
+  <rect x="260" y="264" width="440" height="66" rx="10" fill="url(#step2)" filter="url(#drop2)"/>
+  <text x="480" y="287" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">③ GUARDRAIL — CODE SCAN</text>
+  <text x="480" y="306" text-anchor="middle" fill="#fca5a5" font-size="10">Scans generated code for dangerous patterns</text>
+  <text x="480" y="321" text-anchor="middle" fill="#fecaca" font-size="10">os.system · subprocess · eval · open('/etc') · socket · requests.post</text>
+
+  <!-- BLOCKED branch -->
+  <line x1="260" y1="297" x2="180" y2="297" stroke="#ef4444" stroke-width="1.5" marker-end="url(#a2)"/>
+  <rect x="20" y="278" width="160" height="36" rx="6" fill="#1c0a0a" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="100" y="294" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="800">✗ BLOCKED</text>
+  <text x="100" y="308" text-anchor="middle" fill="#f87171" font-size="8">retry with safer prompt</text>
+
+  <!-- PASS branch -->
+  <line x1="700" y1="297" x2="780" y2="297" stroke="#10b981" stroke-width="1.5" marker-end="url(#a3)"/>
+  <rect x="780" y="278" width="140" height="36" rx="6" fill="#0a1c13" stroke="#10b981" stroke-width="1.5"/>
+  <text x="850" y="294" text-anchor="middle" fill="#10b981" font-size="10" font-weight="800">✓ PASSED</text>
+  <text x="850" y="308" text-anchor="middle" fill="#34d399" font-size="8">file saved to disk</text>
+
+  <line x1="480" y1="330" x2="480" y2="352" stroke="#475569" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- STEP 4: Subprocess -->
+  <rect x="260" y="354" width="440" height="66" rx="10" fill="url(#step4)" filter="url(#drop2)"/>
+  <text x="480" y="377" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">④ SUBPROCESS + OS SANDBOX</text>
+  <text x="480" y="396" text-anchor="middle" fill="#a7f3d0" font-size="10">subprocess.run() with preexec_fn resource limits</text>
+  <text x="480" y="411" text-anchor="middle" fill="#6ee7b7" font-size="10">CPU: 60s max  ·  RAM: 512MB max  ·  File write: 10MB max</text>
+
+  <!-- Annotation left -->
+  <rect x="30" y="364" width="200" height="46" rx="6" fill="#0a1c13" stroke="#059669" stroke-width="1"/>
+  <text x="130" y="383" text-anchor="middle" fill="#34d399" font-size="9" font-weight="700">AGENT RUNS WITH:</text>
+  <text x="130" y="397" text-anchor="middle" fill="#6ee7b7" font-size="8">read() open to all namespaces</text>
+  <text x="130" y="409" text-anchor="middle" fill="#fde68a" font-size="8">write() only to own namespace</text>
+  <line x1="230" y1="387" x2="260" y2="387" stroke="#059669" stroke-width="1" marker-end="url(#a3)"/>
+
+  <line x1="480" y1="420" x2="480" y2="442" stroke="#475569" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- STEP 5: Agent work -->
+  <rect x="260" y="444" width="440" height="78" rx="10" fill="url(#step7)" filter="url(#drop2)"/>
+  <text x="480" y="468" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">⑤ AGENT DOES WORK</text>
+  <text x="480" y="487" text-anchor="middle" fill="#a5f3fc" font-size="10">read_system() → reads task context</text>
+  <text x="480" y="501" text-anchor="middle" fill="#a5f3fc" font-size="10">read_output("other_agent") → reads upstream results</text>
+  <text x="480" y="515" text-anchor="middle" fill="#a5f3fc" font-size="10">think("prompt") → calls LLM  ·  write_result() → saves output</text>
+
+  <line x1="480" y1="522" x2="480" y2="544" stroke="#475569" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- STEP 6: Output validation -->
+  <rect x="260" y="546" width="440" height="58" rx="10" fill="url(#step6)" filter="url(#drop2)"/>
+  <text x="480" y="568" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">⑥ GUARDRAIL — OUTPUT VALIDATE + SEMANTIC</text>
+  <text x="480" y="586" text-anchor="middle" fill="#fbcfe8" font-size="10">Validates: not None · not empty · size OK · structure OK</text>
+  <text x="480" y="600" text-anchor="middle" fill="#f9a8d4" font-size="10">LLM-as-judge: harmful? PII? misinformation? prompt injection?</text>
+
+  <line x1="480" y1="604" x2="480" y2="626" stroke="#475569" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- STEP 7: Scores -->
+  <rect x="260" y="628" width="440" height="58" rx="10" fill="url(#step8)" filter="url(#drop2)"/>
+  <text x="480" y="650" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">⑦ QUALITY + DRIFT SCORING</text>
+  <text x="480" y="669" text-anchor="middle" fill="#c7d2fe" font-size="10">OutputQualityScorer: 0-1 score on relevance + completeness</text>
+  <text x="480" y="683" text-anchor="middle" fill="#a5b4fc" font-size="10">IntentDriftScorer: 0-1 alignment with original task</text>
+
+  <line x1="480" y1="686" x2="480" y2="708" stroke="#475569" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- STEP 8: Fossil -->
+  <rect x="260" y="710" width="440" height="20" rx="8" fill="url(#step5)" filter="url(#drop2)"/>
+  <text x="480" y="724" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">⑧ FOSSIL DEPOSITED  ·  constitution · quality · drift · tokens · runtime</text>
+</svg>

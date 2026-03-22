@@ -1,0 +1,10 @@
+# SpawnVerse — required
+groq>=1.1.0
+
+# Optional — only needed if vector_db_enabled=True
+# pip install chromadb
+# chromadb>=0.4.0
+
+# Optional — for external API examples
+# pip install requests
+# requests>=2.28.0
