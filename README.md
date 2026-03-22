@@ -1,12 +1,29 @@
-# SpawnVerse
-
-> **The universe where agents are born from tasks.**
-> Zero pre-built agents. Distributed memory. Fossil record. Guardrails.
-
-[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Groq](https://img.shields.io/badge/LLM-Groq%20%2F%20LLaMA-orange.svg)](https://groq.com)
-[![Status](https://img.shields.io/badge/status-alpha-yellow.svg)]()
+<div align="center">
+ 
+<h1>⚡ SpawnVerse</h1>
+ 
+<p><strong>The universe where agents are born from tasks.</strong><br/>
+Zero pre-built agents. Distributed memory. Fossil record. Guardrails.</p>
+ 
+<p>
+  <img src="https://img.shields.io/badge/python-3.10+-blue?style=for-the-badge&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/LLM-Groq%20%2F%20LLaMA-orange?style=for-the-badge&logo=groq&logoColor=white" />
+  <img src="https://img.shields.io/badge/status-alpha-yellow?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/memory-distributed-purple?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/agents-self--spawning-red?style=for-the-badge" />
+</p>
+ 
+<p>
+  <img src="https://img.shields.io/badge/VectorDB-ChromaDB-teal?style=flat-square" />
+  <img src="https://img.shields.io/badge/guardrails-4%20layers-critical?style=flat-square" />
+  <img src="https://img.shields.io/badge/execution-parallel-informational?style=flat-square" />
+  <img src="https://img.shields.io/badge/memory-namespace--isolated-blueviolet?style=flat-square" />
+  <img src="https://img.shields.io/badge/sandbox-OS%20resource%20limits-lightgrey?style=flat-square" />
+  <img src="https://img.shields.io/badge/fossils-long%20memory-brown?style=flat-square" />
+</p>
+ 
+</div>
 
 ---
 
