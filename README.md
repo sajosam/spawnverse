@@ -76,22 +76,22 @@ YOU  ←  Complete trip plan: flights, hotels,
 ## Diagrams
 
 ### System Architecture
-![Architecture](docs/diagrams/01_architecture.svg)
+![Architecture](docs/diagrams/01_architecture.png)
 
 ### Agent Lifecycle Flow
-![Agent Lifecycle](docs/diagrams/02_agent_lifecycle.svg)
+![Agent Lifecycle](docs/diagrams/02_agent_lifecycle.png)
 
 ### Distributed Memory Model
-![Memory Model](docs/diagrams/03_memory_model.svg)
+![Memory Model](docs/diagrams/03_memory_model.png)
 
 ### Guardrails — 4 Layers
-![Guardrails](docs/diagrams/04_guardrails.svg)
+![Guardrails](docs/diagrams/04_guardrails.png)
 
 ### Fossil Record — Long Memory
-![Fossil Record](docs/diagrams/05_fossil_record.svg)
+![Fossil Record](docs/diagrams/05_fossil_record.png)
 
 ### SpawnVerse vs Traditional Frameworks
-![Comparison](docs/diagrams/06_comparison.svg)
+![Comparison](docs/diagrams/06_comparison.png)
 
 
 ---
@@ -169,7 +169,7 @@ When vector DB is enabled:
 
 ```bash
 # 1. Clone
-git clone https://github.com/YOUR_USERNAME/spawnverse
+git clone https://github.com/sajosam/spawnverse
 cd spawnverse
 
 # 2. Install
