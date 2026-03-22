@@ -347,11 +347,11 @@ done(score)                  # mark complete, score 0.0-1.0
 
 | # | Name | What it demonstrates |
 |---|---|---|
-| [01](spawnverse/examples/01_general/) | General | Pure LLM, any task, zero dependencies |
-| [02](spawnverse/examples/02_external_apis/) | External APIs | Real weather, forex rates (no keys) |
-| [03](spawnverse/examples/03_vectordb/) | Vector DB | Your documents + semantic RAG |
-| [04](spawnverse/examples/04_minimal/) | Minimal | 2 agents, fastest run, lowest cost |
-| [05](spawnverse/examples/05_maximal/) | Maximal | Depth 3, all features, production |
+| [01](examples/01_general/) | General | Pure LLM, any task, zero dependencies |
+| [02](examples/02_external_apis/) | External APIs | Real weather, forex rates (no keys) |
+| [03](examples/03_vectordb/) | Vector DB | Your documents + semantic RAG |
+| [04](examples/04_minimal/) | Minimal | 2 agents, fastest run, lowest cost |
+| [05](examples/05_maximal/) | Maximal | Depth 3, all features, production |
 
 ---
 
@@ -415,9 +415,7 @@ SpawnVerse uses Groq. Any Groq model works:
 
 ```
 spawnverse/
-├── spawnverse/
-│   ├── __init__.py              exports Orchestrator + DEFAULT_CONFIG
-│   └── core/
+├── core/
 │       ├── __init__.py
 │       └── engine.py            complete system (single file)
 ├── examples/
