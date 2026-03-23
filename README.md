@@ -1,19 +1,25 @@
 <div align="center">
- 
+
 <h1>⚡ SpawnVerse</h1>
- 
+
 <p><strong>The universe where agents are born from tasks.</strong><br/>
 Zero pre-built agents. Distributed memory. Fossil record. Guardrails.</p>
- 
+
+<p>
+  <a href="https://spawnverse.wasmer.app/">
+    <img src="https://img.shields.io/badge/🌐_Live_Demo-spawnverse.wasmer.app-4A90D9?style=for-the-badge" />
+  </a>
+</p>
+
 <p>
   <img src="https://img.shields.io/badge/python-3.10+-blue?style=for-the-badge&logo=python&logoColor=white" />
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/LLM-Groq%20%2F%20LLaMA-orange?style=for-the-badge&logo=groq&logoColor=white" />
+  <img src="https://img.shields.io/badge/LLM-Groq%20%7C%20OpenAI%20%7C%20Anthropic-orange?style=for-the-badge" />
   <img src="https://img.shields.io/badge/status-alpha-yellow?style=for-the-badge" />
   <img src="https://img.shields.io/badge/memory-distributed-purple?style=for-the-badge" />
   <img src="https://img.shields.io/badge/agents-self--spawning-red?style=for-the-badge" />
 </p>
- 
+
 <p>
   <img src="https://img.shields.io/badge/VectorDB-ChromaDB-teal?style=flat-square" />
   <img src="https://img.shields.io/badge/guardrails-4%20layers-critical?style=flat-square" />
@@ -21,8 +27,18 @@ Zero pre-built agents. Distributed memory. Fossil record. Guardrails.</p>
   <img src="https://img.shields.io/badge/memory-namespace--isolated-blueviolet?style=flat-square" />
   <img src="https://img.shields.io/badge/sandbox-OS%20resource%20limits-lightgrey?style=flat-square" />
   <img src="https://img.shields.io/badge/fossils-long%20memory-brown?style=flat-square" />
+  <img src="https://img.shields.io/badge/providers-Groq%20%7C%20OpenAI%20%7C%20Anthropic%20%7C%20Ollama-blueviolet?style=flat-square" />
 </p>
- 
+
+<br/>
+
+<p>
+  <strong>⭐ If SpawnVerse saves you time, please star this repo — it helps others discover it.</strong><br/>
+  <a href="https://github.com/sajosam/spawnverse/stargazers">
+    <img src="https://img.shields.io/github/stars/sajosam/spawnverse?style=social" />
+  </a>
+</p>
+
 </div>
 
 ---
@@ -92,7 +108,6 @@ YOU  ←  Complete trip plan: flights, hotels,
 
 ### SpawnVerse vs Traditional Frameworks
 ![Comparison](docs/diagrams/06_comparison.png)
-
 
 ---
 
@@ -172,18 +187,58 @@ When vector DB is enabled:
 git clone https://github.com/sajosam/spawnverse
 cd spawnverse
 
-# 2. Install
-pip install groq
-# For vector DB:  pip install groq chromadb
+# 2. Install — pick your provider
+pip install groq              # Groq / LLaMA  (free tier, default)
+# pip install openai          # OpenAI        (GPT-4o, GPT-4o-mini)
+# pip install anthropic       # Anthropic     (Claude Opus / Sonnet / Haiku)
 
-# 3. API key (free at console.groq.com)
-export GROQ_API_KEY=your_key_here
+# For vector DB support:
+# pip install chromadb
+
+# 3. Set your API key
+export GROQ_API_KEY=your_key_here        # free at console.groq.com
+# export OPENAI_API_KEY=your_key_here
+# export ANTHROPIC_API_KEY=your_key_here
 
 # 4. Run the simplest example
-python spawnverse/examples/01_general/run.py
+python examples/01_general/run.py
 
 # 5. Or pass your own task
-python spawnverse/examples/01_general/run.py "Research best laptops under 60k in India 2025"
+python examples/01_general/run.py "Research best laptops under 60k in India 2025"
+```
+
+---
+
+## Supported Providers
+
+SpawnVerse works with any of the four providers below. Switch with one config line — no task code changes needed.
+
+| Provider | Models | Key needed | Notes |
+|---|---|---|---|
+| **Groq** *(default)* | `llama-3.3-70b-versatile` · `llama-3.1-8b-instant` · `llama3-70b-8192` | `GROQ_API_KEY` | Free tier · fastest inference |
+| **OpenAI** | `gpt-4o` · `gpt-4o-mini` · `gpt-4-turbo` · `gpt-3.5-turbo` | `OPENAI_API_KEY` | Best reasoning quality |
+| **Anthropic** | `claude-opus-4-5` · `claude-sonnet-4-5` · `claude-haiku-4-5` | `ANTHROPIC_API_KEY` | Excellent instruction-following |
+| **Ollama** *(local)* | `llama3` · `mistral` · `phi3` · any pulled model | *(none)* | Fully offline · zero API cost |
+
+### Switching providers
+
+```python
+from spawnverse import Orchestrator, DEFAULT_CONFIG
+
+# Groq (default — free tier)
+config = {**DEFAULT_CONFIG, "provider": "groq",      "model": "llama-3.3-70b-versatile"}
+
+# OpenAI
+config = {**DEFAULT_CONFIG, "provider": "openai",    "model": "gpt-4o-mini"}
+
+# Anthropic
+config = {**DEFAULT_CONFIG, "provider": "anthropic", "model": "claude-haiku-4-5-20251001"}
+
+# Ollama (local, no internet required)
+config = {**DEFAULT_CONFIG, "provider": "ollama",    "model": "llama3",
+          "ollama_base_url": "http://localhost:11434/v1"}
+
+Orchestrator(config).run({"description": "Your task here", "context": {}})
 ```
 
 ---
@@ -254,10 +309,9 @@ from spawnverse import DEFAULT_CONFIG
 
 # All keys with defaults:
 {
-    # LLM
+    # Provider
+    "provider"           : "",                         # "" = auto-detect from model name
     "model"              : "llama-3.3-70b-versatile",
-    # Alternatives: "llama-3.1-8b-instant" (fast/cheap)
-    #               "llama3-70b-8192" (longer context)
 
     # Agent tree
     "max_depth"          : 2,    # 1=flat  2=balanced  3=deep  4=complex
@@ -265,49 +319,47 @@ from spawnverse import DEFAULT_CONFIG
     "wave2_agents"       : 4,    # synthesis agents (run after wave 1)
 
     # Execution
-    "parallel"           : True, # run wave agents simultaneously
-    "max_parallel"       : 4,    # max concurrent agents
+    "parallel"           : True,
+    "max_parallel"       : 4,
     "timeout_depth0"     : 120,  # seconds — top-level agents
     "timeout_depth1"     : 90,   # seconds — sub-agents
     "timeout_depth2"     : 60,   # seconds — sub-sub-agents
-    "retry_failed"       : True, # retry failed agents once
+    "retry_failed"       : True,
 
     # Quality gates
-    "min_spawn_score"    : 0.4,  # reject vague spawn requests
-    "drift_warn"         : 0.45, # flag outputs drifting from task
-    "quality_min"        : 0.45, # flag low-quality outputs
+    "min_spawn_score"    : 0.4,
+    "drift_warn"         : 0.45,
+    "quality_min"        : 0.45,
 
     # Token budget
-    "token_budget"       : 80000, # total tokens for the whole run
-    "per_agent_tokens"   : 8000,  # max per individual agent
-    "rate_limit_retry"   : 5,     # retries on HTTP 429
-    "rate_limit_wait"    : 3,     # base wait seconds (doubles each retry)
+    "token_budget"       : 80000,
+    "per_agent_tokens"   : 8000,
+    "rate_limit_retry"   : 5,
+    "rate_limit_wait"    : 3,
 
     # Sandbox (Unix only — silently skipped on Windows)
     "sandbox_enabled"    : True,
-    "sandbox_cpu_sec"    : 60,   # max CPU seconds per agent
-    "sandbox_ram_mb"     : 512,  # max RAM per agent
-    "sandbox_fsize_mb"   : 10,   # max file write size
+    "sandbox_cpu_sec"    : 60,
+    "sandbox_ram_mb"     : 512,
+    "sandbox_fsize_mb"   : 10,
 
     # Guardrails
-    "guardrail_code"     : True, # scan generated code before running
-    "guardrail_output"   : True, # validate output before memory write
-    "guardrail_semantic" : True, # LLM-as-judge on every output
+    "guardrail_code"     : True,
+    "guardrail_output"   : True,
+    "guardrail_semantic" : True,
 
     # Vector DB (optional)
     "vector_db_enabled"  : False,
     "vector_db_path"     : "spawnverse_vectordb",
-    "rag_top_k"          : 5,    # results per search
-    "rag_chunk_size"     : 800,  # chars per chunk
+    "rag_top_k"          : 5,
+    "rag_chunk_size"     : 800,
     "rag_chunk_overlap"  : 100,
 
     # Output
-    "output_format"      : "structured",
-    # "report"       → narrative paragraphs
-    # "action_plan"  → numbered steps
-    "show_stdout"        : True,  # print agent internal logs
-    "show_messages"      : True,  # print agent communication log
-    "show_progress"      : True,  # live progress bars
+    "output_format"      : "structured",  # "report" | "action_plan"
+    "show_stdout"        : True,
+    "show_messages"      : True,
+    "show_progress"      : True,
 
     # Paths
     "db_path"            : "spawnverse.db",
@@ -323,39 +375,39 @@ Every generated agent has these functions available:
 
 ```python
 # READ — open to all agents
-read(namespace, key)         # read any agent's data
-read_output(agent_id)        # read another agent's result
-read_system(key)             # read project context
-done_agents()                # list of completed agent IDs
+read(namespace, key)              # read any agent's data
+read_output(agent_id)             # read another agent's result
+read_system(key)                  # read project context
+done_agents()                     # list of completed agent IDs
 
 # WRITE — own namespace only
-write(key, value)            # write to your namespace
-write_result(value)          # write your main output
-write_context(key, value)    # write context for others
+write(key, value)                 # write to your namespace
+write_result(value)               # write your main output
+write_context(key, value)         # write context for others
 
 # PROGRESS
-progress(pct, message)       # report 0-100% progress
+progress(pct, message)            # report 0-100% progress
 
 # MESSAGES
-send(to, type, subject, body)  # send to specific agent
-broadcast(subject, body)       # send to all agents
-inbox()                        # read your unread messages
+send(to, type, subject, body)     # send to specific agent
+broadcast(subject, body)          # send to all agents
+inbox()                           # read your unread messages
 
 # SPAWN
 spawn(name, role, task, tools, my_depth)  # request sub-agent
 
 # LLM (safe, with budget + rate-limit handling)
-think(prompt)                # text response
-think(prompt, as_json=True)  # structured JSON response
-                             # NEVER json.loads() directly
+think(prompt)                     # text response
+think(prompt, as_json=True)       # structured JSON response
+                                  # NEVER json.loads() directly
 
 # VECTOR DB (when enabled)
-rag_search(query)            # list of {text, score, source}
-rag_context(query)           # formatted string for think() prompts
-rag_store(text, key)         # store for other agents to find
+rag_search(query)                 # list of {text, score, source}
+rag_context(query)                # formatted string for think() prompts
+rag_store(text, key)              # store for other agents to find
 
 # DONE
-done(score)                  # mark complete, score 0.0-1.0
+done(score)                       # mark complete, score 0.0-1.0
 ```
 
 ---
@@ -369,6 +421,7 @@ done(score)                  # mark complete, score 0.0-1.0
 | [03](examples/03_vectordb/) | Vector DB | Your documents + semantic RAG |
 | [04](examples/04_minimal/) | Minimal | 2 agents, fastest run, lowest cost |
 | [05](examples/05_maximal/) | Maximal | Depth 3, all features, production |
+| [providers](examples/providers/) | Multi-Provider | Groq · OpenAI · Anthropic · Ollama |
 
 ---
 
@@ -379,7 +432,7 @@ Layer 1 — Code Scan (BEFORE subprocess starts)
   Blocks dangerous patterns in LLM-generated code:
   os.system · subprocess · __import__ · eval · exec
   open("/etc/...") · requests.post · socket.*
-  os.environ (except GROQ_API_KEY read)
+  os.environ (except *_API_KEY reads)
   → Agent file never executed if violation found
 
 Layer 2 — Budget Enforcer (DURING LLM calls)
@@ -399,20 +452,6 @@ Layer 4 — Semantic Guardrail (LLM-as-judge)
 
 ---
 
-## Supported Models
-
-SpawnVerse uses Groq. Any Groq model works:
-
-| Model | Speed | Best for |
-|---|---|---|
-| `llama-3.3-70b-versatile` | Fast | Best quality (default) |
-| `llama-3.1-8b-instant` | Very fast | Quick tasks, low cost |
-| `llama3-70b-8192` | Fast | Long context tasks |
-
-**Free tier:** Groq free tier supports SpawnVerse. Keep `max_parallel ≤ 4`.
-
----
-
 ## What Makes SpawnVerse Different
 
 | | LangGraph | CrewAI | AutoGen | **SpawnVerse** |
@@ -424,6 +463,7 @@ SpawnVerse uses Groq. Any Groq model works:
 | Intent drift measurement | ❌ | ❌ | ❌ | **✅** |
 | Code-scan guardrail | ❌ | ❌ | ❌ | **✅** |
 | OS-level resource limits | ❌ | ❌ | ❌ | **✅** |
+| Multi-provider (Groq/OpenAI/Anthropic/Ollama) | ❌ | Partial | Partial | **✅** |
 | Agents invent sub-agents | Partial | ❌ | Partial | **✅** |
 
 ---
@@ -433,15 +473,17 @@ SpawnVerse uses Groq. Any Groq model works:
 ```
 spawnverse/
 ├── core/
-│       ├── __init__.py
-│       └── engine.py            complete system (single file)
+│   ├── __init__.py
+│   └── engine.py              complete system (single file)
 ├── examples/
-│   ├── 01_general/run.py        pure LLM
-│   ├── 02_external_apis/run.py  real public APIs
-│   ├── 03_vectordb/run.py       ChromaDB RAG
-│   ├── 04_minimal/run.py        minimal config
-│   └── 05_maximal/run.py        all features
+│   ├── 01_general/run.py      pure LLM, any task
+│   ├── 02_external_apis/run.py
+│   ├── 03_vectordb/run.py     ChromaDB RAG
+│   ├── 04_minimal/run.py
+│   ├── 05_maximal/run.py      all features
+│   └── providers/run.py       Groq · OpenAI · Anthropic · Ollama
 ├── docs/
+│   ├── diagrams/              architecture diagrams (PNG)
 │   ├── architecture.md
 │   ├── memory-model.md
 │   ├── guardrails.md
@@ -461,6 +503,7 @@ spawnverse/
 - [ ] Better intent drift via sentence-transformers
 - [ ] Unit tests for core modules
 - [ ] Windows resource limits support
+- [ ] Ollama local provider
 
 ### v0.3
 - [ ] Soul system — persistent agent identities across runs
@@ -469,9 +512,9 @@ spawnverse/
 - [ ] Evolution engine
 
 ### v0.4
-- [ ] Multi-model support (OpenAI, Anthropic, local Ollama)
 - [ ] Async execution
 - [ ] REST API server mode
+- [ ] Web UI for run inspection
 
 ---
 
@@ -484,6 +527,7 @@ Priority areas:
 2. Docker sandbox executor
 3. More domain-specific examples
 4. Better intent drift measurement
+5. Ollama provider integration
 
 ---
 
