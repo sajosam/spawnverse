@@ -9,7 +9,9 @@ Run:
 """
 import sys, os, shutil
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
-from core.engine import Orchestrator, DEFAULT_CONFIG
+from spawnverse.core.engine import Orchestrator, DEFAULT_CONFIG
+
+os.environ["GROQ_API_KEY"] = ""
 
 CONFIG = {**DEFAULT_CONFIG, **{
     "max_depth"          : 1,
@@ -24,7 +26,7 @@ CONFIG = {**DEFAULT_CONFIG, **{
     "token_budget"       : 20000,
     "per_agent_tokens"   : 3000,
 }}
-
+ 
 TASK = {
     "description": (
         sys.argv[1] if len(sys.argv) > 1
@@ -32,7 +34,7 @@ TASK = {
     ),
     "context": {}
 }
-
+ 
 if __name__ == "__main__":
     for f in [CONFIG["db_path"]]:
         if os.path.exists(f): os.remove(f)

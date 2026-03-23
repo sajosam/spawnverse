@@ -1,4 +1,4 @@
-# core/engine.py
+#!/usr/bin/env python3
 """
 spawnverse/core/engine.py
 ═════════════════════════
@@ -64,6 +64,13 @@ DEFAULT_CONFIG = {
     "show_progress"      : True,
     "db_path"            : "spawnverse.db",
     "agents_dir"         : ".spawnverse_agents",
+
+    # ── External APIs (auto-injected, zero extra installs) ──────────────
+    # False = disabled, True = auto-detect from task, list = explicit
+    # Example: "external_apis": ["weather", "forex"]
+    # Example: "external_apis": True  (LLM decides what task needs)
+    "external_apis"      : False,
+    "external_api_key"   : {},  # {"openweather": "key", ...} for paid APIs
 }
 
 # ══════════════════════════════════════════════════════════════════════
@@ -414,8 +421,9 @@ class VectorDB:
                  f"knowledge={self._knowledge.count()} "
                  f"fossils={self._fossils.count()}", "G")
         except ImportError:
-            _log("VDB", "WARN", "chromadb not installed",
-                 "pip install chromadb", "Y")
+            _log("VDB", "WARN", "chromadb not installed — RAG disabled",
+                 "Run: pip install chromadb  (optional)", "Y")
+            # Not fatal — system runs without vector DB
 
     def _chunk(self, text):
         size = self.cfg["rag_chunk_size"]
@@ -522,8 +530,8 @@ class Guardrails:
         r"os\.environ(?!\s*\.get\s*\(\s*['\"]GROQ_API_KEY['\"])",
     ]
 
-    def scan_code(self, agent_id, code):
-        if not True:  # config passed at call site
+    def scan_code(self, agent_id, code, enabled=True):
+        if not enabled:
             return True, []
         violations = []
         for p in self.DANGEROUS:
@@ -575,35 +583,59 @@ class Guardrails:
 
 class IntentDriftScorer:
     def score(self, task, role, output, client, config):
+        # If output is empty/None return neutral score — not 0.0
+        if not output or (isinstance(output, dict) and not any(
+                v for v in output.values() if v)):
+            return 0.5
         text, _ = _llm(client, config,
                         [{"role": "system",
                           "content": "Return ONLY valid JSON. Start with {."},
                          {"role": "user",
                           "content": (
-                              f"Score alignment 0-1 between task and output.\n"
-                              f"TASK: {task[:200]}\nROLE: {role}\n"
-                              f"OUTPUT: {str(output)[:300]}\n"
-                              'Return: {"score": <0.0-1.0>}'
+                              f"Score 0.0-1.0: does this output address the task?\n"
+                              f"TASK: {task[:150]}\nROLE: {role}\n"
+                              f"OUTPUT (first 300 chars): {str(output)[:300]}\n"
+                              "1.0=fully addresses task. 0.0=completely unrelated.\n"
+                              'Return ONLY: {"score": 0.X}'
                           )}],
-                        max_tokens=100)
+                        max_tokens=80)
         r = _safe_json(text)
-        return round(max(0.0, min(1.0, float(r.get("score", 0.5)))), 3)
+        raw = r.get("score", 0.5)
+        try:
+            return round(max(0.0, min(1.0, float(raw))), 3)
+        except (TypeError, ValueError):
+            return 0.5
 
 
 class OutputQualityScorer:
     def score(self, task, output, client, config):
+        # If output is empty/None or is just an error message — return 0.0
+        if not output or (isinstance(output, dict) and not any(
+                v for v in output.values() if v)):
+            return 0.0
+        # Detect useless placeholder outputs
+        output_str = str(output).lower()
+        USELESS = ['no context', 'no relevant', 'no data', 'not available',
+                   'unable to', 'insufficient data', 'no information']
+        if len(output_str) < 100 and any(u in output_str for u in USELESS):
+            return 0.05  # near-zero — basically empty
         text, _ = _llm(client, config,
                         [{"role": "system",
                           "content": "Return ONLY valid JSON. Start with {."},
                          {"role": "user",
                           "content": (
-                              f"Score output quality 0-1.\n"
-                              f"TASK: {task[:200]}\nOUTPUT: {str(output)[:300]}\n"
-                              'Return: {"score": <0.0-1.0>}'
+                              f"Score output quality 0.0-1.0.\n"
+                              f"TASK: {task[:150]}\nOUTPUT: {str(output)[:300]}\n"
+                              "1.0=excellent specific answer. 0.0=empty or wrong domain.\n"
+                              'Return ONLY: {"score": 0.X}'
                           )}],
-                        max_tokens=100)
+                        max_tokens=80)
         r = _safe_json(text)
-        return round(max(0.0, min(1.0, float(r.get("score", 0.5)))), 3)
+        raw = r.get("score", 0.5)
+        try:
+            return round(max(0.0, min(1.0, float(raw))), 3)
+        except (TypeError, ValueError):
+            return 0.0
 
 
 class SpawnScorer:
@@ -634,11 +666,199 @@ class SpawnScorer:
         return round(min(s, 1.0), 2)
 
 
+
+# ══════════════════════════════════════════════════════════════════════
+#  EXTERNAL API REGISTRY
+#  All helpers use stdlib urllib — zero extra pip installs.
+#  Auto-injected into agent stdlib when external_apis is enabled.
+# ══════════════════════════════════════════════════════════════════════
+
+# Registry: keyword → (stdlib_code, description, hint_for_agents)
+_API_REGISTRY = {
+    "weather": {
+        "keywords": ["weather","temperature","climate","forecast","rain","snow","sunny"],
+        "hint"    : "get_weather(city) → {temp_c, desc, humidity, wind_kmph}",
+        "code"    : """
+def get_weather(city):
+    \"\"\"Real weather from wttr.in — no API key needed.\"\"\"
+    import urllib.request as _r, urllib.parse as _p, json as _j
+    try:
+        url = f'https://wttr.in/{_p.quote(str(city))}?format=j1'
+        with _r.urlopen(_r.Request(url, headers={'User-Agent':'sv/1'}), timeout=8) as r:
+            d = _j.loads(r.read())
+        c = d.get('current_condition',[{}])[0]
+        return {'temp_c':c.get('temp_C'),'feels_like':c.get('FeelsLikeC'),
+                'humidity':c.get('humidity'),'wind_kmph':c.get('windspeedKmph'),
+                'desc':c.get('weatherDesc',[{}])[0].get('value')}
+    except Exception as e: vlog('API_WEATHER_FAIL',str(e)); return None
+"""
+    },
+    "forex": {
+        "keywords": ["exchange rate","forex","currency","convert","inr","usd","eur","jpy","gbp","aed"],
+        "hint"    : "get_rate(base, target) → float rate or None",
+        "code"    : """
+def get_rate(base, target):
+    \"\"\"Live forex rate from open.er-api.com — no key needed.\"\"\"
+    import urllib.request as _r, json as _j
+    try:
+        url = f'https://open.er-api.com/v6/latest/{base}'
+        with _r.urlopen(_r.Request(url, headers={'User-Agent':'sv/1'}), timeout=8) as r:
+            d = _j.loads(r.read())
+        rate = d.get('rates',{}).get(target)
+        return round(float(rate), 6) if rate else None
+    except Exception as e: vlog('API_FOREX_FAIL',str(e)); return None
+"""
+    },
+    "country": {
+        "keywords": ["country","nation","capital","population","language","region","visa","citizenship"],
+        "hint"    : "get_country(name) → {name, capital, population, region, languages, currencies, timezones}",
+        "code"    : """
+def get_country(name):
+    \"\"\"Country info from restcountries.com — no key needed.\"\"\"
+    import urllib.request as _r, urllib.parse as _p, json as _j
+    try:
+        url = f'https://restcountries.com/v3.1/name/{_p.quote(str(name))}'
+        with _r.urlopen(_r.Request(url, headers={'User-Agent':'sv/1'}), timeout=8) as r:
+            d = _j.loads(r.read())
+        c = d[0] if isinstance(d,list) else d
+        return {'name':c.get('name',{}).get('common'),'capital':c.get('capital',[''])[0],
+                'population':c.get('population'),'region':c.get('region'),
+                'languages':list(c.get('languages',{}).values())[:4],
+                'currencies':list(c.get('currencies',{}).keys()),
+                'timezones':c.get('timezones',[])[:3]}
+    except Exception as e: vlog('API_COUNTRY_FAIL',str(e)); return None
+"""
+    },
+    "holidays": {
+        "keywords": ["holiday","public holiday","national day","festival","celebration"],
+        "hint"    : "get_holidays(country_code, year) → [{date, name}, ...]",
+        "code"    : """
+def get_holidays(country_code, year=2025):
+    \"\"\"Public holidays from date.nager.at — no key needed.\"\"\"
+    import urllib.request as _r, json as _j
+    try:
+        url = f'https://date.nager.at/api/v3/PublicHolidays/{year}/{country_code}'
+        with _r.urlopen(_r.Request(url, headers={'User-Agent':'sv/1'}), timeout=8) as r:
+            d = _j.loads(r.read())
+        return [{'date':h.get('date'),'name':h.get('localName'),'type':h.get('types',[])} for h in d[:12]]
+    except Exception as e: vlog('API_HOLIDAY_FAIL',str(e)); return []
+"""
+    },
+    "crypto": {
+        "keywords": ["bitcoin","ethereum","crypto","btc","eth","sol","blockchain","token","coin","defi"],
+        "hint"    : "get_crypto(symbol) → {usd, inr} prices or None",
+        "code"    : """
+def get_crypto(symbol='BTC'):
+    \"\"\"Crypto price from CoinGecko — no key needed.\"\"\"
+    import urllib.request as _r, json as _j
+    COINS = {'BTC':'bitcoin','ETH':'ethereum','SOL':'solana','BNB':'binancecoin',
+             'USDT':'tether','XRP':'ripple','ADA':'cardano','DOT':'polkadot'}
+    coin_id = COINS.get(symbol.upper(), symbol.lower())
+    try:
+        url = f'https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd,inr'
+        with _r.urlopen(_r.Request(url, headers={'User-Agent':'sv/1'}), timeout=8) as r:
+            d = _j.loads(r.read())
+        return d.get(coin_id)
+    except Exception as e: vlog('API_CRYPTO_FAIL',str(e)); return None
+"""
+    },
+    "news": {
+        "keywords": ["news","latest","headlines","article","media","press","breaking"],
+        "hint"    : "get_news(topic) → [{title, url, source}, ...] (via HackerNews)",
+        "code"    : """
+def get_news(topic=None):
+    \"\"\"Latest HackerNews top stories — no key needed.\"\"\"
+    import urllib.request as _r, json as _j
+    try:
+        url = 'https://hacker-news.firebaseio.com/v0/topstories.json'
+        with _r.urlopen(url, timeout=8) as r:
+            ids = _j.loads(r.read())[:8]
+        stories = []
+        for sid in ids[:5]:
+            with _r.urlopen(f'https://hacker-news.firebaseio.com/v0/item/{sid}.json', timeout=5) as r:
+                item = _j.loads(r.read())
+            stories.append({'title':item.get('title'),'url':item.get('url'),
+                            'score':item.get('score'),'by':item.get('by')})
+        return stories
+    except Exception as e: vlog('API_NEWS_FAIL',str(e)); return []
+"""
+    },
+}
+
+
+def _detect_needed_apis(task_desc: str, config: dict, client) -> list:
+    """
+    Returns list of API names needed for this task.
+    If external_apis=True  → ask LLM to decide
+    If external_apis=list  → use that list directly
+    If external_apis=False → return []
+    """
+    setting = config.get("external_apis", False)
+    if setting is False:
+        return []
+    if isinstance(setting, list):
+        # User specified explicitly — validate against registry
+        valid = [k for k in setting if k in _API_REGISTRY]
+        _log("API", "CONFIG", "EXPLICIT APIS", str(valid), "C")
+        return valid
+    if setting is True:
+        # Auto-detect: keyword matching first (fast, no LLM token cost)
+        task_lower = task_desc.lower()
+        matched = []
+        for name, info in _API_REGISTRY.items():
+            if any(kw in task_lower for kw in info["keywords"]):
+                matched.append(name)
+        if matched:
+            _log("API", "AUTO", "DETECTED FROM KEYWORDS", str(matched), "C")
+            return matched
+        # Fallback to LLM if keyword matching found nothing
+        text, _ = _llm(client, config, [
+            {"role": "system",
+             "content": "Return ONLY a valid JSON array of strings. Start with [."},
+            {"role": "user",
+             "content": (
+                 f"Which of these external APIs does this task need?\n"
+                 f"TASK: {task_desc[:200]}\n"
+                 f"AVAILABLE: {list(_API_REGISTRY.keys())}\n"
+                 "Return a JSON array of needed API names, e.g. [\"weather\", \"forex\"]\n"
+                 "Return [] if none needed."
+             )}
+        ], max_tokens=100)
+        result = _safe_json(text)
+        if isinstance(result, list):
+            valid = [k for k in result if k in _API_REGISTRY]
+            _log("API", "LLM", "DETECTED FROM TASK", str(valid), "C")
+            return valid
+    return []
+
+
+def _build_api_stdlib(api_names: list, api_keys: dict = None) -> str:
+    """Build the stdlib code for the detected APIs."""
+    if not api_names:
+        return ""
+    parts = ["\n# ── External API Helpers (auto-injected by SpawnVerse) ─────────"]
+    hints = []
+    for name in api_names:
+        if name in _API_REGISTRY:
+            code = _API_REGISTRY[name]["code"].strip()
+            # Inject API key if provided and function signature needs it
+            if api_keys and name in api_keys:
+                key = api_keys[name]
+                code = code.replace("# NO_KEY_NEEDED", f"# key={key!r}")
+            parts.append(code)
+            hints.append(_API_REGISTRY[name]["hint"])
+    if hints:
+        parts.append("\n# Available API functions:")
+        for h in hints:
+            parts.append(f"#   {h}")
+    return "\n".join(parts)
+
+
 # ══════════════════════════════════════════════════════════════════════
 #  STDLIB BUILDER
 # ══════════════════════════════════════════════════════════════════════
 
-def _build_stdlib(agent_id, config, vdb_enabled=False):
+def _build_stdlib(agent_id, config, vdb_enabled=False, api_stdlib=""):
     """
     Written directly to agent files. Never goes through LLM.
     LLM only writes the main() function.
@@ -655,7 +875,7 @@ def _build_stdlib(agent_id, config, vdb_enabled=False):
     tk  = config["rag_top_k"]
     ve  = vdb_enabled
 
-    return "\n".join([
+    stdlib = "\n".join([
         "import sys, json, sqlite3, os, time, hashlib",
         "from datetime import datetime",
         "from groq import Groq",
@@ -733,7 +953,7 @@ def _build_stdlib(agent_id, config, vdb_enabled=False):
         # Done
         "def done(score=1.0):",
         "    c=_c()",
-        "    c.execute(\"UPDATE agents SET status='done',ended_at=?,success=1,score=? WHERE agent_id=?\",(datetime.now().isoformat(),score,_ID))",
+        "    c.execute(\"UPDATE agents SET status='done',ended_at=?,success=1 WHERE agent_id=?\",(datetime.now().isoformat(),_ID))",
         "    c.commit(); c.close()",
         "",
 
@@ -784,7 +1004,7 @@ def _build_stdlib(agent_id, config, vdb_enabled=False):
         "",
         "def rag_context(query, collection='knowledge'):",
         "    hits=rag_search(query,collection=collection)",
-        "    if not hits: return 'No relevant context found.'",
+        "    if not hits: return ''",
         "    return '\\n\\n'.join(f'[{i+1}] score={h[\"score\"]}\\n{h[\"text\"]}' for i,h in enumerate(hits))",
         "",
         "def rag_store(text, key='', metadata=None, collection='context'):",
@@ -807,6 +1027,15 @@ def _build_stdlib(agent_id, config, vdb_enabled=False):
         "    print()",
         "",
     ])
+    # Inject auto-detected external API helpers
+    if api_stdlib:
+        stdlib += "\n" + api_stdlib
+    # Also inject manually passed extra_stdlib (legacy support)
+    extra = config.get("extra_stdlib", "")
+    if extra:
+        stdlib += "\n\n# ── extra_stdlib ───────\n"
+        stdlib += extra
+    return stdlib
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -817,74 +1046,88 @@ class Generator:
 
     def generate(self, client, config, agent_id, role, task,
                  tools, project_ctx, depth, fmt,
-                 vdb_enabled=False, retry=False):
+                 vdb_enabled=False, retry=False, api_stdlib=""):
 
         _log("GEN", "LLM", f"Writing {agent_id}",
              f"d={depth} role={role}", "P")
 
+        # Build API hint for prompt
+        api_hint = ""
+        if api_stdlib and isinstance(api_stdlib, str) and api_stdlib.strip():
+            # Extract function names from the stdlib code
+            import re as _re
+            fn_names = _re.findall(r"^def (\w+)\(", api_stdlib, _re.MULTILINE)
+            if fn_names:
+                api_hint = ("\nEXTERNAL API HELPERS AVAILABLE:\n"
+                            + "\n".join(f"  {f}(...)  — call directly, no import needed"
+                                        for f in fn_names)
+                            + "\n  These call real APIs. Use them to get live data.\n")
+
         rag_hint = (
-            "\nVECTOR DB AVAILABLE:\n"
-            "  rag_context(query)  → context string for think() prompts\n"
-            "  rag_search(query)   → list of {text, score, source}\n"
-            "  rag_store(text)     → store for other agents to find\n"
-            "  Use rag_context() BEFORE think() for knowledge tasks.\n"
+            "\nVECTOR DB (only if chromadb is installed):\n"
+            "  ctx = rag_context(query)  # returns string OR empty string if no DB\n"
+            "  ALWAYS: if ctx: use ctx in think() prompt -- else skip and think() directly\n"
+            "  NEVER write result={'msg': ctx} -- ctx goes INSIDE think() prompt only\n"
+            "  PATTERN: prompt=(f'Context:{ctx}\\nTask:'+task) if ctx else ('Task: '+task)\n"
+            "  rag_store(str(result)) stores your output for future agents\n"
         ) if vdb_enabled else ""
 
         retry_note = (
             "\nRETRY: Keep main() simple. "
-            "Always .get() on dicts. Wrap risky code in try/except.\n"
+            "raw=read_output(x); d=raw if raw is not None else {}; d.get(k). Wrap risky in try/except.\n"
         ) if retry else ""
 
         prompt = (
-            "Write def main(): for a Python agent. "
-            "All helpers are already defined. Do NOT redefine them.\n"
+            "Write def main(): for a Python agent."
+            " All helpers already defined. Do NOT redefine them.\n"
             + retry_note + "\n"
+            f"AGENT: {agent_id}  ROLE: {role}  DEPTH: {depth}\n"
+            f"TASK: {task}\n"
+            f"CTX: {str(project_ctx)[:400]}\n\n"
             "HELPERS:\n"
-            "  READ  : read(ns,key) read_output(aid) read_system(key) done_agents()\n"
-            "  WRITE : write(key,v) write_result(v) write_context(k,v)\n"
-            "  PROG  : progress(pct, msg)\n"
-            "  MSG   : send(to,type,subject,body) broadcast(s,b) inbox()\n"
-            "  SPAWN : spawn(name,role,task,tools,my_depth)\n"
-            "  LLM   : think(prompt) think(prompt,as_json=True)\n"
-            "  DONE  : done(score)\n"
+            "  READ  : read(ns,key)  read_output(aid)  read_system(key)  done_agents()\n"
+            "  WRITE : write_result(v)  write(key,v)\n"
+            "  LLM   : think(prompt)  think(prompt,as_json=True)\n"
+            "  MSG   : send(to,type,subject,body_dict)  broadcast(subject,body_dict)\n"
+            "  PROG  : progress(pct,msg)  done(score=0.85)\n"
             + rag_hint +
-            f"\nAGENT: {agent_id}\nROLE: {role}\nTASK: {task}\n"
-            f"TOOLS: {tools}\nDEPTH: {depth}\nFMT: {fmt}\n"
-            f"CTX: {str(project_ctx)[:300]}\n\n"
-            "WRITE def main(): steps:\n"
-            "1. vlog('BOOT','starting'); progress(0,'boot')\n\n"
-            "2. project=read_system('project')\n"
-            "   ctx=project.get('context',{}) if project else {}\n"
-            "   progress(10,'context loaded')\n\n"
+            "\nSTEPS:\n"
+            "1. vlog('BOOT','starting'); progress(0,'boot')\n"
+            "2. project=read_system('project'); ctx=project.get('context',{}) if project else {}\n"
+            "   progress(10,'context loaded')\n"
             "3. completed=done_agents()\n"
-            "   # read_output('agent_id') for relevant upstream agents\n"
-            "   # Always .get('key',default) on upstream data\n"
-            + ("   # ctx=rag_context('your query'); use in think() prompt\n"
-               if vdb_enabled else "") +
-            "   progress(20,'upstream read')\n\n"
-            f"4. DO THE WORK: {task}\n"
-            "   think(prompt) for text reasoning\n"
-            "   think(prompt,as_json=True) for structured data\n"
-            "   NEVER json.loads() on LLM output — use think(as_json=True)\n"
-            "   Always .get() on any dict from upstream or LLM\n"
-            "   progress(60,'work done')\n\n"
-            "5. send('target','DIRECTIVE','subject',{'k':'v'})\n"
-            "   broadcast('completed role',{'summary':'...'})\n"
-            "   progress(80,'messages sent')\n\n"
-            "6. Optional: spawn one sub-agent only if genuinely needed\n\n"
-            "7. result={...actual task-specific output...}\n"
-            "   write_result(result)\n"
-            + ("   rag_store(str(result), key='result')  # optional\n"
-               if vdb_enabled else "") +
-            "   progress(100,'complete')\n"
-            "   done(score=0.8)\n"
-            "   vlog('COMPLETED','done')\n\n"
-            "RULES:\n"
-            "  - ONLY def main(): — nothing else\n"
-            "  - No imports, no extra functions\n"
-            "  - No markdown, no backticks — raw Python only\n"
-            "  - Always .get() on any external data\n"
-            "  - Output must be real and task-specific\n"
+            "   # SAFE READ: raw=read_output(aid); d=raw if raw is not None else {}; d.get(k,default)\n"
+            "   # NEVER: read_output(x).get(k) -- crashes if not done\n"
+            "   # If upstream is empty or None -- DO NOT fail. Reason from your own task.\n"
+            "   # A synthesis agent must always produce output, even if upstream failed.\n"
+            "   progress(20,'upstream read')\n"
+            "4. USE think() TO DO THE WORK:\n"
+            "   Option A: result = think(your_detailed_prompt, as_json=True)  # returns real dict\n"
+            "   Option B: text = think(your_prompt); result = {'output': text, 'data': [...]}\n"
+            "   NEVER create empty dicts: result = {'key': []} is worthless\n"
+            "   Your think() prompt must be SPECIFIC to the exact TASK and CTX above\n"
+            "   progress(60,'work done')\n"
+            "5. broadcast('done: '+role[:30], {'summary': 'one sentence of what you found'})\n"
+            "   progress(80,'broadcast sent')\n"
+            "6. write_result(result); progress(100,'complete'); done(score=0.85)\n"
+            "   vlog('COMPLETED','done')\n"
+            "\nRULES:\n"
+            "  R1. Only def main(): -- zero imports, zero extra functions, no markdown\n"
+            "  R2. think(p, as_json=True) returns a REAL populated dict -- use it as result\n"
+            "  R3. NEVER create empty lists/dicts in result -- think() must populate them\n"
+            f"  R4. Your task is SPECIFICALLY: {task[:100]}\n"
+            "      Produce data ONLY for that exact domain. India=India. EV=EV. Not USA.\n"
+            "  R5. Use CTX above for location/budget/currency. Context is ground truth.\n"
+            "  R6. broadcast(subject_str, body_dict) -- EXACTLY 2 args\n"
+            "  R7. send(to, type, subject, body_dict) -- EXACTLY 4 args\n"
+            "  R8. done(score=0.85) -- one optional float only\n"
+            "  R9. NEVER write result={'msg':'No context found'} -- always produce real data\n"
+            "  R10. If upstream failed -- use think() independently, never return empty result\n"
+            "  R11. NEVER: if 'chromadb' in read_system(x) -- chromadb not in system state\n"
+            "       Use: ctx=rag_context(q); if ctx: use_in_prompt else think_directly\n"
+            "  R12. NEVER: raw=read_output(aid) -- 'aid' undefined\n"
+            "       Use: raw=read_output('specific_agent_id') with the ACTUAL string\n"
+            "  R13. Dates/years from CTX, not training memory\n"
         )
 
         text, tokens = _llm(client, config,
@@ -896,7 +1139,8 @@ class Generator:
                 text = text.split(fence, 1)[1].split("```", 1)[0].strip()
                 break
 
-        stdlib = _build_stdlib(agent_id, config, vdb_enabled)
+        stdlib = _build_stdlib(agent_id, config, vdb_enabled,
+                               api_stdlib=api_stdlib)
         final  = (f"# AGENT: {agent_id}  depth={depth}\n\n"
                   + stdlib + "\n\n" + text + "\n\nmain()\n")
 
@@ -932,7 +1176,8 @@ class Executor:
 
         # Guardrail Layer 1: code scan
         if guardrails and config["guardrail_code"]:
-            safe, violations = guardrails.scan_code(agent_id, code)
+            safe, violations = guardrails.scan_code(
+                agent_id, code, enabled=config["guardrail_code"])
             if not safe:
                 if mem:
                     mem.log_guardrail(agent_id, "code_scan", "blocked",
@@ -964,8 +1209,14 @@ class Executor:
             print(div + "\n")
 
         if result.returncode != 0:
+            stderr_out = result.stderr.strip()
             _log("EXEC", agent_id, f"FAILED rc={result.returncode}",
-                 result.stderr[:400], "R")
+                 stderr_out[:600] if stderr_out else "(no stderr)", "R")
+            # Also print stdout so LLM-generated errors are visible
+            if result.stdout.strip() and not config.get("show_stdout"):
+                print(f"  STDOUT from failed {agent_id}:")
+                for line in result.stdout.strip().splitlines()[-20:]:
+                    print(f"    {line}")
             return False, elapsed
 
         _log("EXEC", agent_id, f"DONE {elapsed}s", "", "G")
@@ -993,9 +1244,14 @@ class Orchestrator:
         self.run_id  = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.consts: dict = {}
 
+        # Auto-detect and pre-build external API stdlib
+        self._api_names  = []   # resolved after task arrives
+        self._api_stdlib = ""   # built once during run()
+
         _log("ORCH", "SYSTEM", "BOOT",
              f"run_id={self.run_id} "
              f"vdb={self.cfg['vector_db_enabled']} "
+             f"apis={self.cfg['external_apis']} "
              f"depth={self.cfg['max_depth']} "
              f"parallel={self.cfg['parallel']}", "M")
 
@@ -1042,7 +1298,8 @@ class Orchestrator:
             spec.get("tools_needed", ["llm_reasoning"]),
             ctx, depth, self.cfg["output_format"],
             vdb_enabled=self.cfg["vector_db_enabled"],
-            retry=retry
+            retry=retry,
+            api_stdlib=self._api_stdlib
         )
         self.consts[aid] = code
 
@@ -1057,7 +1314,8 @@ class Orchestrator:
                 spec.get("tools_needed", ["llm_reasoning"]),
                 ctx, depth, self.cfg["output_format"],
                 vdb_enabled=self.cfg["vector_db_enabled"],
-                retry=True
+                retry=True,
+                api_stdlib=self._api_stdlib
             )
             self.consts[aid] = code2
             ok, elapsed = self.exe.run(
@@ -1184,7 +1442,7 @@ class Orchestrator:
                             to index into vector DB before agents run
         """
         global _tokens_used
-        _tokens_used = 0
+        _tokens_used = 0  # reset for each new run
 
         desc = task["description"]
         ctx  = task.get("context", {})
@@ -1201,6 +1459,17 @@ class Orchestrator:
             "output_format": fmt, "run_id": self.run_id,
             "started_at": datetime.now().isoformat(),
         })
+
+        # Auto-detect external APIs from task description
+        if self.cfg.get("external_apis", False) is not False:
+            self._api_names = _detect_needed_apis(
+                desc, self.cfg, self.client)
+            if self._api_names:
+                self._api_stdlib = _build_api_stdlib(
+                    self._api_names,
+                    self.cfg.get("external_api_key", {}))
+                _log("API", "AUTO", "INJECTING HELPERS",
+                     str(self._api_names), "C")
 
         if self.cfg["vector_db_enabled"] and knowledge_base:
             print(f"\n{'─'*66}\n  PHASE 0 — INDEXING KNOWLEDGE BASE\n{'─'*66}\n")
@@ -1234,6 +1503,30 @@ class Orchestrator:
         rels    = self.mem.strong_relationships()
 
         print(f"\n{'═'*66}\n  FINAL OUTPUTS\n  {desc[:60]}\n{'═'*66}\n")
+        def _show(v, pad=2):
+            sp = " " * pad
+            if isinstance(v, dict):
+                for k, vv in v.items():
+                    if isinstance(vv, (dict, list)):
+                        print(f"{sp}{k}:"); _show(vv, pad+2)
+                    else:
+                        val = str(vv)
+                        if len(val) > 64:
+                            print(f"{sp}{k}:")
+                            for line in textwrap.wrap(val, 60-pad):
+                                print(f"{sp}  {line}")
+                        else:
+                            print(f"{sp}{k:22s}: {val}")
+            elif isinstance(v, list):
+                for item in v:
+                    if isinstance(item, dict):
+                        _show(item, pad); print()
+                    else:
+                        print(f"{sp}• {item}")
+            else:
+                for line in textwrap.wrap(str(v), 60-pad):
+                    print(f"{sp}{line}")
+
         for agent_id, result in outputs.items():
             info = self.mem.agent_info(agent_id)
             q    = info.get("quality", 0)
@@ -1244,32 +1537,7 @@ class Orchestrator:
             print(f"  {agent_id.upper().replace('_',' ')}{flag}")
             print(f"  quality={q:.2f}  drift={d:.2f}")
             print(f"{'─'*66}")
-
-            def show(v, pad=2):
-                sp = " " * pad
-                if isinstance(v, dict):
-                    for k, vv in v.items():
-                        if isinstance(vv, (dict, list)):
-                            print(f"{sp}{k}:"); show(vv, pad+2)
-                        else:
-                            val = str(vv)
-                            if len(val) > 64:
-                                print(f"{sp}{k}:")
-                                for line in textwrap.wrap(val, 60-pad):
-                                    print(f"{sp}  {line}")
-                            else:
-                                print(f"{sp}{k:22s}: {val}")
-                elif isinstance(v, list):
-                    for item in v:
-                        if isinstance(item, dict):
-                            show(item, pad); print()
-                        else:
-                            print(f"{sp}• {item}")
-                else:
-                    for line in textwrap.wrap(str(v), 60-pad):
-                        print(f"{sp}{line}")
-
-            show(result); print()
+            _show(result); print()
 
         print(f"{'═'*66}\n  EXECUTION SUMMARY\n{'─'*66}")
         print(f"  Agents         : {stats['agents']} ({stats['success']} ok, {stats['failed']} failed)")

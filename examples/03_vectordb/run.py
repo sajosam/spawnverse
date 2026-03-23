@@ -17,21 +17,22 @@ Run:
 """
 import sys, os, shutil
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
-from core.engine import Orchestrator, DEFAULT_CONFIG
+from spawnverse.core.engine import Orchestrator, DEFAULT_CONFIG
 
-# ── ADD YOUR DOCUMENTS HERE ───────────────────────────────────────────
+os.environ["GROQ_API_KEY"] = ""
+
 KNOWLEDGE_BASE = [
     # Plain text strings:
     "Dubai Marina 2BHK apartments average AED 1.1M in Q1 2025.",
     "JVC (Jumeirah Village Circle) offers the best ROI at 7-8% annually.",
     "RERA requires all Dubai property agents to be licensed.",
     "Off-plan payment plans: typically 50% during construction, 50% on handover.",
-
+ 
     # Or file paths:
     # "/path/to/your/document.txt",
     # "/path/to/market-report.md",
 ]
-
+ 
 CONFIG = {**DEFAULT_CONFIG, **{
     "vector_db_enabled" : True,
     "vector_db_path"    : "./sv_vectordb_03",
@@ -41,7 +42,7 @@ CONFIG = {**DEFAULT_CONFIG, **{
     "wave2_agents"      : 3,
     "parallel"          : True,
 }}
-
+ 
 TASK = {
     "description": (
         "Analyse the Dubai real estate market for off-plan 2BHK investments "
@@ -55,7 +56,7 @@ TASK = {
         "property"    : "2BHK off-plan",
     }
 }
-
+ 
 if __name__ == "__main__":
     for f in [CONFIG["db_path"]]:
         if os.path.exists(f): os.remove(f)

@@ -4,13 +4,15 @@ Pure LLM reasoning. No external APIs. No vector DB.
 Give it any task — agents are invented at runtime.
 
 Run:
-    export GROQ_API_KEY=your_key
     python run.py
     python run.py "your task here"
 """
 import sys, os, shutil
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
-from core.engine import Orchestrator, DEFAULT_CONFIG
+from spawnverse.core.engine import Orchestrator, DEFAULT_CONFIG
+
+# os.environ["GROQ_API_KEY"] = ""
+os.environ["GROQ_API_KEY"] = ""
 
 CONFIG = {**DEFAULT_CONFIG, **{
     "max_depth"     : 2,
@@ -21,7 +23,7 @@ CONFIG = {**DEFAULT_CONFIG, **{
     "show_stdout"   : True,
     "show_messages" : True,
 }}
-
+ 
 TASK = {
     "description": (
         "Research and compare the top 5 electric vehicles in India "
@@ -36,7 +38,7 @@ TASK = {
         "location"   : "Bangalore, India",
     }
 }
-
+ 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         TASK = {"description": " ".join(sys.argv[1:]), "context": {}}
@@ -45,3 +47,4 @@ if __name__ == "__main__":
     if os.path.exists(CONFIG["agents_dir"]):
         shutil.rmtree(CONFIG["agents_dir"])
     Orchestrator(CONFIG).run(TASK)
+ 

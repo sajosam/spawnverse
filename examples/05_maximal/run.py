@@ -12,12 +12,14 @@ Run:
 """
 import sys, os, shutil
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
-from core.engine import Orchestrator, DEFAULT_CONFIG
+from spawnverse.core.engine import Orchestrator, DEFAULT_CONFIG
+
+os.environ["GROQ_API_KEY"] = ""
 
 KNOWLEDGE_BASE = [
     # Add domain documents for RAG
 ]
-
+ 
 CONFIG = {**DEFAULT_CONFIG, **{
     "model"              : "llama-3.3-70b-versatile",
     "max_depth"          : 3,
@@ -44,7 +46,7 @@ CONFIG = {**DEFAULT_CONFIG, **{
     "show_messages"      : True,
     "show_progress"      : True,
 }}
-
+ 
 TASK = {
     "description": (
         "Perform a complete investment due diligence report on the Indian "
@@ -61,10 +63,11 @@ TASK = {
         "horizon_years" : 3,
     }
 }
-
+ 
 if __name__ == "__main__":
     for f in [CONFIG["db_path"]]:
         if os.path.exists(f): os.remove(f)
     if os.path.exists(CONFIG["agents_dir"]):
         shutil.rmtree(CONFIG["agents_dir"])
     Orchestrator(CONFIG).run(TASK, knowledge_base=KNOWLEDGE_BASE)
+ 
