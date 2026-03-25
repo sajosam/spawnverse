@@ -11,7 +11,7 @@ leave fossil records, and are protected by guardrails.
 CORE PRINCIPLES:
   1. Zero pre-built agents — everything invented at runtime
   2. Distributed memory — any agent reads all, writes only own namespace
-  3. Parallel wave execution — gather then synthesize
+  3. DAG-based scheduling — agents run as soon as dependencies are met
   4. Fossil record — every dead agent leaves memory for the future
   5. 4-layer guardrails — code scan, budget, output, semantic
   6. OS-level sandbox — CPU/RAM/file limits per subprocess
