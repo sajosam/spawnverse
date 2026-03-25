@@ -1,16 +1,22 @@
-# Contributing to SpawnVerse
+# Contributing to SpawnVerse 🚀
 
-## Priority Areas
+Thanks for your interest in contributing — this project is built to be simple, hackable, and evolving.
+
+---
+
+## 🧭 Where You Can Help
 
 | Area | What's needed |
-|---|---|
-| Tests | Unit tests for DistributedMemory, Guardrails, SpawnScorer |
-| Docker | Replace subprocess with Docker sandbox per agent |
-| Intent Drift | sentence-transformers instead of LLM-as-judge |
-| Examples | Healthcare, code review, content calendar |
-| Windows | Resource limits don't work on Windows yet |
+|------|--------------|
+| 🧪 Tests | Unit tests for DistributedMemory, Guardrails, SpawnScorer |
+| 🐳 Sandbox | Replace subprocess with Docker-based isolation |
+| 🧠 Intent Drift | Explore embedding-based scoring (sentence-transformers) |
+| 📦 Examples | Healthcare, code review, content calendar |
+| 🪟 Windows | Fix resource limits on Windows |
 
-## Quick Setup
+---
+
+## ⚡ Quick Start
 
 ```bash
 git clone https://github.com/sajosam/spawnverse
@@ -18,12 +24,51 @@ cd spawnverse
 pip install -e ".[dev]"
 ```
 
-## Submit a PR
+Run a simple example:
 
-1. Fork → branch → change → PR
-2. Add a test if possible
-3. Clear description of what and why
+```python
+from spawnverse import Orchestrator
 
-## Questions
+Orchestrator().run({
+    "description": "Research top 5 EVs in India under ₹25L"
+})
+```
 
-Open a GitHub Discussion. No question is too basic.
+---
+
+## 🛠️ How to Contribute
+
+1. Fork the repo  
+2. Create a branch (`feature/your-feature`)  
+3. Make your changes  
+4. Open a PR  
+
+---
+
+## 📌 Contribution Guidelines
+
+- Keep it simple (avoid over-engineering)
+- Prefer clarity over cleverness
+- Add logs where useful
+- If possible, include a test
+- Small PRs > large PRs
+
+---
+
+## 💡 Good First Issues
+
+Look for issues labeled:
+- `good first issue`
+- `enhancement`
+
+Or improve:
+- logging
+- error handling
+- examples
+
+---
+
+## 🤝 Before You Start
+
+If you're working on something large (DAG, Soul system, etc.),  
+drop a comment on the issue first — happy to discuss direction.
