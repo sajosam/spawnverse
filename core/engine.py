@@ -1477,18 +1477,62 @@ class Orchestrator:
                 self.vdb.ingest(doc)
 
         print(f"\n{'─'*66}\n  PHASE 1 — DECOMPOSE TASK\n{'─'*66}\n")
-        agents = self._decompose(desc, fmt)
-        wave1  = [a for a in agents if not a.get("depends_on")]
-        wave2  = [a for a in agents if     a.get("depends_on")]
+        agents = self._decompose(desc, fmt)      
 
-        self._run_wave(wave1, depth=0,
-                       label="PHASE 2 — WAVE 1  Gathering (parallel)")
-        self._handle_spawns()
+        print(f"\n{'─'*66}\n  PHASE 2 — DAG SCHEDULING\n{'─'*66}\n")
 
-        if wave2:
-            self._run_wave(wave2, depth=0,
-                           label="PHASE 3 — WAVE 2  Synthesis")
+        # ── DAG-based scheduling ──────────────────────────────────────────
+        pending   = list(agents)
+        completed: set[str] = set()
+        iteration = 1
+
+        while pending:
+            ready = [
+                a for a in pending
+                if set(a.get("depends_on", [])).issubset(completed)
+            ]
+
+            ready_ids = {r["agent_id"] for r in ready}
+
+            _log("ORCH", "DAG", "STATE",
+                 f"iteration={iteration} | "
+                 f"completed={list(completed)} | "
+                 f"waiting={[a['agent_id'] for a in pending if a['agent_id'] not in ready_ids]} | "
+                 f"ready={list(ready_ids)}",
+                 "B")
+
+            if not ready:
+                all_ids = {a["agent_id"] for a in (self.mem.get_system("plan") or [])}
+                for a in pending:
+                    for dep in a.get("depends_on", []):
+                        if dep not in all_ids:
+                            _log("ORCH", "DAG", "MISSING_DEP",
+                                 f"{a['agent_id']} depends on unknown agent {dep!r}", "R")
+                        elif dep not in completed:
+                            _log("ORCH", "DAG", "UNMET_DEP",
+                                 f"{a['agent_id']} waiting for {dep!r}", "W")
+                raise RuntimeError(
+                    f"DAG deadlock: {len(pending)} agent(s) blocked — "
+                    "check logs for MISSING_DEP / UNMET_DEP details"
+                )
+
+            self._run_wave(
+                ready,
+                depth=0,
+                label=f"DAG iteration={iteration} — {len(ready)} agent(s)"
+            )
+
+            completed.update(a["agent_id"] for a in ready)
+            pending = [a for a in pending if a["agent_id"] not in completed]
+
             self._handle_spawns()
+
+            existing_ids = {a["agent_id"] for a in pending} | completed
+            for a in (self.mem.get_system("plan") or []):
+                if a["agent_id"] not in existing_ids:
+                    pending.append(a)
+
+            iteration += 1
 
         if self.cfg["show_messages"]:
             print(f"\n{'═'*66}\n  AGENT COMMUNICATION LOG\n{'═'*66}\n")
