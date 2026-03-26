@@ -1423,13 +1423,20 @@ class Orchestrator:
                 self.mem.close_spawn(req["id"], "rejected")
                 continue
             ran.add(req["name"])
-            self._spawn(
-                {"agent_id": req["name"], "role": req["role"],
-                 "task": req["task"], "tools_needed": req["tools"],
-                 "depends_on": []},
-                spawned_by=req["by"], depth=req["depth"])
+            new_spec = {
+                "agent_id"    : req["name"],
+                "role"        : req["role"],
+                "task"        : req["task"],
+                "tools_needed": req["tools"],
+                "depends_on"  : []
+            }
+            current_plan = self.mem.get_system("plan") or []
+            current_plan.append(new_spec)
+            self.mem.set_system("plan", current_plan)
             self.mem.close_spawn(req["id"])
-
+            _log("ORCH", req["name"], "SPAWN_QUEUED",
+                 "added to DAG pending pool", "Y")
+            
     def run(self, task, knowledge_base=None):
         """
         Main entry point.
