@@ -11,7 +11,7 @@ leave fossil records, and are protected by guardrails.
 CORE PRINCIPLES:
   1. Zero pre-built agents — everything invented at runtime
   2. Distributed memory — any agent reads all, writes only own namespace
-  3. Parallel wave execution — gather then synthesize
+  3. DAG-based scheduling — agents run as soon as dependencies are met
   4. Fossil record — every dead agent leaves memory for the future
   5. 4-layer guardrails — code scan, budget, output, semantic
   6. OS-level sandbox — CPU/RAM/file limits per subprocess
@@ -1396,17 +1396,25 @@ class Orchestrator:
             for s in specs:
                 self._spawn(s, depth=depth)
 
-    def _handle_spawns(self):
-        pending = self.mem.pending_spawns()
-        if not pending:
+    def _handle_spawns(self, pending: list, completed: set) -> None:
+        """
+        Process pending spawn requests.
+        Approved agents are appended directly to the pending pool
+        so the DAG scheduler picks them up in the next iteration.
+        """
+        spawn_requests = self.mem.pending_spawns()
+        if not spawn_requests:
             return
-        _log("ORCH", "SPAWNS", "CHECK", f"{len(pending)} pending", "M")
-        plan = self.mem.get_system("plan") or []
-        ran  = {a["agent_id"] for a in plan}
 
-        for req in pending:
+        _log("ORCH", "SPAWNS", "CHECK",
+             f"{len(spawn_requests)} pending", "M")
+
+        existing_ids = {a["agent_id"] for a in pending} | completed
+
+        for req in spawn_requests:
             score = self.spawner.score(
-                req["name"], req["role"], req["task"], ran)
+                req["name"], req["role"], req["task"], existing_ids)
+
             reject = None
             if req["depth"] > self.cfg["max_depth"]:
                 reject = f"depth {req['depth']} > max"
@@ -1416,33 +1424,33 @@ class Orchestrator:
                 reject = "role too short"
             elif len(req["task"]) < 20:
                 reject = "task too short"
-            elif req["name"] in ran:
+            elif req["name"] in existing_ids:
                 reject = "duplicate"
+
             if reject:
                 _log("ORCH", req["name"], "SPAWN_REJECTED", reject, "Y")
                 self.mem.close_spawn(req["id"], "rejected")
                 continue
-            ran.add(req["name"])
-            self._spawn(
-                {"agent_id": req["name"], "role": req["role"],
-                 "task": req["task"], "tools_needed": req["tools"],
-                 "depends_on": []},
-                spawned_by=req["by"], depth=req["depth"])
+
+            new_spec = {
+                "agent_id"    : req["name"],
+                "role"        : req["role"],
+                "task"        : req["task"],
+                "tools_needed": req["tools"],
+                "depends_on"  : []
+            }
+
+            # Add to live pending pool directly — no DB round-trip needed
+            pending.append(new_spec)
+            existing_ids.add(req["name"])
             self.mem.close_spawn(req["id"])
 
-    def run(self, task, knowledge_base=None):
-        """
-        Main entry point.
+            _log("ORCH", req["name"], "SPAWN_QUEUED",
+                 "added to DAG pending pool", "Y")
 
-        Args:
-            task: dict with keys:
-                "description" (str)  — the task in plain English
-                "context"     (dict) — optional structured context
-            knowledge_base: list of strings or file paths
-                            to index into vector DB before agents run
-        """
+    def run(self, task, knowledge_base=None):
         global _tokens_used
-        _tokens_used = 0  # reset for each new run
+        _tokens_used = 0
 
         desc = task["description"]
         ctx  = task.get("context", {})
@@ -1455,12 +1463,13 @@ class Orchestrator:
         print(f"{'═'*66}\n")
 
         self.mem.set_system("project", {
-            "description": desc, "context": ctx,
-            "output_format": fmt, "run_id": self.run_id,
-            "started_at": datetime.now().isoformat(),
+            "description"  : desc,
+            "context"      : ctx,
+            "output_format": fmt,
+            "run_id"       : self.run_id,
+            "started_at"   : datetime.now().isoformat(),
         })
 
-        # Auto-detect external APIs from task description
         if self.cfg.get("external_apis", False) is not False:
             self._api_names = _detect_needed_apis(
                 desc, self.cfg, self.client)
@@ -1478,17 +1487,65 @@ class Orchestrator:
 
         print(f"\n{'─'*66}\n  PHASE 1 — DECOMPOSE TASK\n{'─'*66}\n")
         agents = self._decompose(desc, fmt)
-        wave1  = [a for a in agents if not a.get("depends_on")]
-        wave2  = [a for a in agents if     a.get("depends_on")]
 
-        self._run_wave(wave1, depth=0,
-                       label="PHASE 2 — WAVE 1  Gathering (parallel)")
-        self._handle_spawns()
+        print(f"\n{'─'*66}\n  PHASE 2 — DAG SCHEDULING\n{'─'*66}\n")
 
-        if wave2:
-            self._run_wave(wave2, depth=0,
-                           label="PHASE 3 — WAVE 2  Synthesis")
-            self._handle_spawns()
+        # ── DAG scheduling loop ───────────────────────────────────────────
+        pending   = list(agents)
+        completed = set()
+        iteration = 1
+
+        while pending:
+            ready = [
+                a for a in pending
+                if set(a.get("depends_on", [])).issubset(completed)
+            ]
+
+            # Deadlock detection
+            if not ready:
+                all_ids = {a["agent_id"] for a in pending} | completed
+                for a in pending:
+                    for dep in a.get("depends_on", []):
+                        if dep not in all_ids:
+                            _log("ORCH", "DAG", "MISSING_DEP",
+                                 f"{a['agent_id']} depends on "
+                                 f"unknown agent {dep!r}", "R")
+                        else:
+                            _log("ORCH", "DAG", "UNMET_DEP",
+                                 f"{a['agent_id']} waiting "
+                                 f"for {dep!r}", "W")
+                raise RuntimeError(
+                    f"DAG deadlock: {len(pending)} agent(s) blocked — "
+                    "check logs for MISSING_DEP / UNMET_DEP details"
+                )
+
+            ready_ids = {a["agent_id"] for a in ready}
+            waiting   = [a["agent_id"] for a in pending
+                         if a["agent_id"] not in ready_ids]
+
+            _log("ORCH", "DAG", "STATE",
+                 f"iteration={iteration} | "
+                 f"completed={sorted(completed)} | "
+                 f"waiting={waiting} | "
+                 f"ready={sorted(ready_ids)}", "B")
+
+            self._run_wave(
+                ready,
+                depth=0,
+                label=f"DAG iteration={iteration} "
+                      f"— {len(ready)} agent(s)"
+            )
+
+            # Update state — no DB round-trip needed
+            completed.update(ready_ids)
+            pending = [a for a in pending
+                       if a["agent_id"] not in completed]
+
+            # Handle dynamic spawns — passes pending directly
+            self._handle_spawns(pending, completed)
+
+            iteration += 1
+        # ── end DAG loop ──────────────────────────────────────────────────
 
         if self.cfg["show_messages"]:
             print(f"\n{'═'*66}\n  AGENT COMMUNICATION LOG\n{'═'*66}\n")
@@ -1503,54 +1560,63 @@ class Orchestrator:
         rels    = self.mem.strong_relationships()
 
         print(f"\n{'═'*66}\n  FINAL OUTPUTS\n  {desc[:60]}\n{'═'*66}\n")
+
         def _show(v, pad=2):
             sp = " " * pad
             if isinstance(v, dict):
                 for k, vv in v.items():
                     if isinstance(vv, (dict, list)):
-                        print(f"{sp}{k}:"); _show(vv, pad+2)
+                        print(f"{sp}{k}:")
+                        _show(vv, pad + 2)
                     else:
                         val = str(vv)
                         if len(val) > 64:
                             print(f"{sp}{k}:")
-                            for line in textwrap.wrap(val, 60-pad):
+                            for line in textwrap.wrap(val, 60 - pad):
                                 print(f"{sp}  {line}")
                         else:
                             print(f"{sp}{k:22s}: {val}")
             elif isinstance(v, list):
                 for item in v:
                     if isinstance(item, dict):
-                        _show(item, pad); print()
+                        _show(item, pad)
+                        print()
                     else:
                         print(f"{sp}• {item}")
             else:
-                for line in textwrap.wrap(str(v), 60-pad):
+                for line in textwrap.wrap(str(v), 60 - pad):
                     print(f"{sp}{line}")
 
         for agent_id, result in outputs.items():
             info = self.mem.agent_info(agent_id)
             q    = info.get("quality", 0)
-            d    = info.get("drift", 0)
-            flag = " ⚠️" if (q < self.cfg["quality_min"] or
-                              d < self.cfg["drift_warn"]) else ""
+            d    = info.get("drift",   0)
+            flag = (" ⚠️" if (q < self.cfg["quality_min"] or
+                               d < self.cfg["drift_warn"]) else "")
             print(f"{'─'*66}")
-            print(f"  {agent_id.upper().replace('_',' ')}{flag}")
+            print(f"  {agent_id.upper().replace('_', ' ')}{flag}")
             print(f"  quality={q:.2f}  drift={d:.2f}")
             print(f"{'─'*66}")
-            _show(result); print()
+            _show(result)
+            print()
 
         print(f"{'═'*66}\n  EXECUTION SUMMARY\n{'─'*66}")
-        print(f"  Agents         : {stats['agents']} ({stats['success']} ok, {stats['failed']} failed)")
-        print(f"  Quality / Drift: {stats['avg_quality']:.2f} / {stats['avg_drift']:.2f}")
+        print(f"  Agents         : {stats['agents']} "
+              f"({stats['success']} ok, {stats['failed']} failed)")
+        print(f"  Quality / Drift: "
+              f"{stats['avg_quality']:.2f} / {stats['avg_drift']:.2f}")
         print(f"  Messages       : {stats['messages']}")
-        print(f"  Spawns         : {stats['spawns']} ({stats['spawn_rejected']} rejected)")
+        print(f"  Spawns         : {stats['spawns']} "
+              f"({stats['spawn_rejected']} rejected)")
         print(f"  Fossils        : {stats['fossils']}")
         print(f"  Guard blocks   : {stats['guardrail_blocked']}")
-        print(f"  Tokens used    : {_tokens_used:,}/{self.cfg['token_budget']:,}")
+        print(f"  Tokens used    : "
+              f"{_tokens_used:,}/{self.cfg['token_budget']:,}")
         print(f"  Wall time      : {elapsed}s")
         if rels:
             print(f"{'─'*66}\n  AGENT RELATIONSHIPS")
             for r in rels[:3]:
-                print(f"    {r['a']} ↔ {r['b']}  avg={r['avg']}  runs={r['runs']}")
+                print(f"    {r['a']} ↔ {r['b']}  "
+                      f"avg={r['avg']}  runs={r['runs']}")
         print(f"{'═'*66}\n")
         return outputs
