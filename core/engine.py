@@ -11,7 +11,7 @@ leave fossil records, and are protected by guardrails.
 CORE PRINCIPLES:
   1. Zero pre-built agents — everything invented at runtime
   2. Distributed memory — any agent reads all, writes only own namespace
-  3. DAG-based scheduling — agents run as soon as dependencies are met
+  3. Parallel wave execution — gather then synthesize
   4. Fossil record — every dead agent leaves memory for the future
   5. 4-layer guardrails — code scan, budget, output, semantic
   6. OS-level sandbox — CPU/RAM/file limits per subprocess
@@ -213,6 +213,12 @@ class DistributedMemory:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     agent_id TEXT, layer TEXT,
                     verdict TEXT, detail TEXT, ts TEXT);
+                CREATE TABLE IF NOT EXISTS intent_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT, agent_id TEXT, role TEXT,
+                    drift REAL DEFAULT 0.0, quality REAL DEFAULT 0.0,
+                    contribution TEXT, wave TEXT DEFAULT 'gathering',
+                    ts TEXT);
             """)
 
     def read(self, namespace, key):
@@ -388,6 +394,29 @@ class DistributedMemory:
                 "VALUES (?,?,?,?,?)",
                 (agent_id, layer, verdict, detail[:300],
                  datetime.now().isoformat()))
+
+    def log_intent(self, run_id, agent_id, role, drift, quality,
+                   contribution="", wave="gathering"):
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO intent_log "
+                "(run_id,agent_id,role,drift,quality,contribution,wave,ts) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (run_id, agent_id, role[:80], round(drift, 3),
+                 round(quality, 3), contribution[:200], wave,
+                 datetime.now().isoformat()))
+
+    def intent_summary(self, run_id):
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT agent_id, role, drift, quality, contribution, wave "
+                "FROM intent_log WHERE run_id=? ORDER BY ts",
+                (run_id,)).fetchall()
+        return [
+            {"agent_id": r[0], "role": r[1], "drift": r[2],
+             "quality": r[3], "contribution": r[4], "wave": r[5]}
+            for r in rows
+        ]
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1223,6 +1252,123 @@ class Executor:
         return True, elapsed
 
 
+
+# ══════════════════════════════════════════════════════════════════════
+#  INTENT TRACKER
+#  System-level alignment view across all agents in a run.
+#  Wires into _spawn() — zero changes to existing code paths.
+# ══════════════════════════════════════════════════════════════════════
+
+class IntentTracker:
+    """
+    Tracks intent alignment at system level, not just per agent.
+
+    After each agent completes, _spawn() calls track().
+    At the end of run(), print_report() renders the full alignment graph.
+    """
+
+    WEAK_THRESHOLD = 0.45   # below this = weak link
+    WARN_THRESHOLD = 0.65   # below this = caution
+
+    def __init__(self, run_id: str, task_desc: str, mem: "DistributedMemory"):
+        self.run_id    = run_id
+        self.task_desc = task_desc
+        self.mem       = mem
+        self._entries: list = []   # in-memory mirror for the report
+
+    def track(self, agent_id: str, role: str, drift: float, quality: float,
+              output, wave: str = "gathering") -> None:
+        """Called from _spawn() immediately after SCORES are logged."""
+        # Derive a one-line contribution from output keys (no LLM call)
+        contribution = self._summarise(agent_id, output)
+        self._entries.append({
+            "agent_id"    : agent_id,
+            "role"        : role,
+            "drift"       : round(drift, 3),
+            "quality"     : round(quality, 3),
+            "contribution": contribution,
+            "wave"        : wave,
+        })
+        self.mem.log_intent(
+            self.run_id, agent_id, role, drift, quality, contribution, wave)
+
+    def _summarise(self, agent_id: str, output) -> str:
+        if not output or not isinstance(output, dict):
+            return "no output"
+        keys = [str(k) for k in output.keys()
+                if str(k) != "raw" and output[k]][:4]
+        return f"{agent_id}: [{', '.join(keys)}]" if keys else "empty result"
+
+    def print_report(self) -> None:
+        if not self._entries:
+            return
+
+        drifts   = [e["drift"]   for e in self._entries]
+        qualities= [e["quality"] for e in self._entries]
+        sys_drift= round(sum(drifts) / len(drifts), 3)
+        sys_qual = round(sum(qualities) / len(qualities), 3)
+
+        weak  = [e for e in self._entries if e["drift"] < self.WEAK_THRESHOLD]
+        caution=[e for e in self._entries if
+                 self.WEAK_THRESHOLD <= e["drift"] < self.WARN_THRESHOLD]
+
+        # Split by wave for chain analysis
+        gathering = [e for e in self._entries if e["wave"] == "gathering"]
+        synthesis = [e for e in self._entries if e["wave"] == "synthesis"]
+        g_avg = (round(sum(e["drift"] for e in gathering) / len(gathering), 3)
+                 if gathering else None)
+        s_avg = (round(sum(e["drift"] for e in synthesis) / len(synthesis), 3)
+                 if synthesis else None)
+
+        div = "═" * 66
+        sdiv= "─" * 66
+
+        print(f"\n{div}")
+        print(f"  INTENT ALIGNMENT REPORT")
+        print(f"  Task: {self.task_desc[:60]}")
+        print(f"{sdiv}")
+        print(f"  System Alignment     : {sys_drift:.2f}  "
+              f"{self._bar(sys_drift)}  quality={sys_qual:.2f}")
+        print()
+        print(f"  AGENT CONTRIBUTIONS  ({len(self._entries)} agents):")
+        for e in self._entries:
+            d = e["drift"]
+            flag = ("  ✅" if d >= self.WARN_THRESHOLD else
+                    "  ⚠️" if d >= self.WEAK_THRESHOLD else
+                    "  🔴 WEAK LINK")
+            aid_short = e["agent_id"][:30]
+            print(f"    {aid_short:<30}  drift={d:.2f}  {self._bar(d)}{flag}")
+            print(f"    {'':30}  {e['contribution'][:60]}")
+
+        if weak:
+            print(f"\n  🔴 WEAK LINKS  (drift < {self.WEAK_THRESHOLD}):")
+            for e in weak:
+                print(f"    {e['agent_id']}  drift={e['drift']:.2f}")
+                print(f"    → May have drifted from: {self.task_desc[:50]}")
+        elif caution:
+            print(f"\n  ⚠️  CAUTION (drift < {self.WARN_THRESHOLD}):")
+            for e in caution:
+                print(f"    {e['agent_id']}  drift={e['drift']:.2f}")
+        else:
+            print(f"\n  ✅ All agents stayed aligned to task")
+
+        if g_avg is not None or s_avg is not None:
+            print(f"\n  CHAIN ANALYSIS:")
+            if g_avg is not None:
+                print(f"    Gathering wave avg drift : {g_avg:.2f}  {self._bar(g_avg)}")
+            if s_avg is not None:
+                delta = round(s_avg - g_avg, 3) if g_avg is not None else 0
+                sign  = "+" if delta >= 0 else ""
+                print(f"    Synthesis wave avg drift : {s_avg:.2f}  {self._bar(s_avg)}"
+                      f"  ({sign}{delta} vs gathering)")
+
+        print(f"{div}\n")
+
+    @staticmethod
+    def _bar(score: float, width: int = 10) -> str:
+        filled = round(score * width)
+        return "█" * filled + "░" * (width - filled)
+
 # ══════════════════════════════════════════════════════════════════════
 #  ORCHESTRATOR — the only thing that exists before the task
 # ══════════════════════════════════════════════════════════════════════
@@ -1243,6 +1389,7 @@ class Orchestrator:
         self.t0      = time.time()
         self.run_id  = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.consts: dict = {}
+        self.intent: IntentTracker | None = None  # set in run()
 
         # Auto-detect and pre-build external API stdlib
         self._api_names  = []   # resolved after task arrives
@@ -1355,6 +1502,14 @@ class Orchestrator:
                 _log("ORCH", aid, "SCORES",
                      f"quality={quality_score:.2f} drift={drift_score:.2f}", "C")
 
+                # Record in intent tracking system
+                if self.intent is not None:
+                    wave = ("synthesis" if spec.get("depends_on")
+                            else "gathering")
+                    self.intent.track(
+                        aid, spec["role"], drift_score,
+                        quality_score, output, wave)
+
         for other in self.mem.completed_agents():
             if other != aid:
                 info = self.mem.agent_info(other)
@@ -1449,8 +1604,18 @@ class Orchestrator:
                  "added to DAG pending pool", "Y")
 
     def run(self, task, knowledge_base=None):
+        """
+        Main entry point.
+
+        Args:
+            task: dict with keys:
+                "description" (str)  — the task in plain English
+                "context"     (dict) — optional structured context
+            knowledge_base: list of strings or file paths
+                            to index into vector DB before agents run
+        """
         global _tokens_used
-        _tokens_used = 0
+        _tokens_used = 0  # reset for each new run
 
         desc = task["description"]
         ctx  = task.get("context", {})
@@ -1463,13 +1628,12 @@ class Orchestrator:
         print(f"{'═'*66}\n")
 
         self.mem.set_system("project", {
-            "description"  : desc,
-            "context"      : ctx,
-            "output_format": fmt,
-            "run_id"       : self.run_id,
-            "started_at"   : datetime.now().isoformat(),
+            "description": desc, "context": ctx,
+            "output_format": fmt, "run_id": self.run_id,
+            "started_at": datetime.now().isoformat(),
         })
 
+        # Auto-detect external APIs from task description
         if self.cfg.get("external_apis", False) is not False:
             self._api_names = _detect_needed_apis(
                 desc, self.cfg, self.client)
@@ -1487,6 +1651,9 @@ class Orchestrator:
 
         print(f"\n{'─'*66}\n  PHASE 1 — DECOMPOSE TASK\n{'─'*66}\n")
         agents = self._decompose(desc, fmt)
+
+        # Initialise intent tracker for this run
+        self.intent = IntentTracker(self.run_id, desc, self.mem)
 
         print(f"\n{'─'*66}\n  PHASE 2 — DAG SCHEDULING\n{'─'*66}\n")
 
@@ -1536,7 +1703,7 @@ class Orchestrator:
                       f"— {len(ready)} agent(s)"
             )
 
-            # Update state — no DB round-trip needed
+            # Update state
             completed.update(ready_ids)
             pending = [a for a in pending
                        if a["agent_id"] not in completed]
@@ -1619,4 +1786,9 @@ class Orchestrator:
                 print(f"    {r['a']} ↔ {r['b']}  "
                       f"avg={r['avg']}  runs={r['runs']}")
         print(f"{'═'*66}\n")
+
+        # Print intent alignment report
+        if self.intent is not None:
+            self.intent.print_report()
+
         return outputs
