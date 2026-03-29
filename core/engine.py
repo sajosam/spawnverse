@@ -11,7 +11,7 @@ leave fossil records, and are protected by guardrails.
 CORE PRINCIPLES:
   1. Zero pre-built agents — everything invented at runtime
   2. Distributed memory — any agent reads all, writes only own namespace
-  3. Parallel wave execution — gather then synthesize
+  3. DAG-based scheduling — agents run as soon as dependencies are met
   4. Fossil record — every dead agent leaves memory for the future
   5. 4-layer guardrails — code scan, budget, output, semantic
   6. OS-level sandbox — CPU/RAM/file limits per subprocess
@@ -1293,10 +1293,19 @@ class IntentTracker:
             self.run_id, agent_id, role, drift, quality, contribution, wave)
 
     def _summarise(self, agent_id: str, output) -> str:
-        if not output or not isinstance(output, dict):
+        """Lightweight contribution label — no LLM token cost."""
+        if not output:
             return "no output"
-        keys = [str(k) for k in output.keys()
-                if str(k) != "raw" and output[k]][:4]
+        if isinstance(output, list):
+            first = output[0] if output else {}
+            keys = [str(k) for k in first.keys() if str(k) != "raw"][:3] \
+                   if isinstance(first, dict) else []
+            label = ", ".join(keys)
+            return (f"{agent_id}: list[{len(output)}] [{label}]"
+                    if keys else f"{agent_id}: list[{len(output)}]")
+        if not isinstance(output, dict):
+            return "no output"
+        keys = [str(k) for k in output.keys() if str(k) != "raw"][:4]
         return f"{agent_id}: [{', '.join(keys)}]" if keys else "empty result"
 
     def print_report(self) -> None:
