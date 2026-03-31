@@ -71,6 +71,9 @@ DEFAULT_CONFIG = {
     # Example: "external_apis": True  (LLM decides what task needs)
     "external_apis"      : False,
     "external_api_key"   : {},  # {"openweather": "key", ...} for paid APIs
+    "soul_quality_threshold"      : 0.7,
+    "soul_min_runs"               : 3,
+    "soul_constitution_max_chars" : 800,
 }
 
 # ══════════════════════════════════════════════════════════════════════
@@ -213,6 +216,16 @@ class DistributedMemory:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     agent_id TEXT, layer TEXT,
                     verdict TEXT, detail TEXT, ts TEXT);
+                CREATE TABLE IF NOT EXISTS souls (
+                        soul_id TEXT PRIMARY KEY,
+                        role TEXT UNIQUE NOT NULL,
+                        avg_quality REAL DEFAULT 0.0,
+                        total_runs INTEGER DEFAULT 0,
+                        best_constitution TEXT,
+                        best_quality REAL DEFAULT 0.0,  
+                        created_at TEXT,
+                        last_updated TEXT);                           
+
             """)
 
     def read(self, namespace, key):
@@ -389,11 +402,98 @@ class DistributedMemory:
                 (agent_id, layer, verdict, detail[:300],
                  datetime.now().isoformat()))
 
+    def get_soul(self, role: str, min_runs: int = 3) -> dict | None:
+        """
+        Fetch the soul for a given role.
+        Returns None if no valid soul exists.
+        Conditions:
+            - total_runs >= min_runs
+            - avg_quality > 0.0
+        """
+        role = role.strip().lower() if role else None
+        if not role:
+            return None
+        with self._conn() as conn:
+            conn.row_factory = lambda cursor, row: {
+                col[0]: row[idx]
+                for idx, col in enumerate(cursor.description)
+            }
+        return conn.execute(
+            """
+            SELECT soul_id, role, avg_quality, best_quality,
+                   total_runs, best_constitution
+            FROM souls
+            WHERE role = ?
+              AND total_runs >= ?
+              AND avg_quality > ?
+            LIMIT 1
+            """,
+            (role, min_runs, 0.0)
+        ).fetchone()
+    
+    def update_soul(self, role: str, quality: float, constitution: str) -> None:
+        """
+        Insert or update a soul entry.
 
+            - Deterministic soul_id from normalized role
+            - Running average update
+            - best_constitution updated ONLY when quality strictly improves best_quality
+            """
+
+        role = role.strip().lower() if role else None
+        if not role:
+            _log("SOUL", "update_soul", "SKIPPED", "empty role", "Y")
+            return
+
+        # Clamp once
+        quality = max(0.0, min(1.0, quality))
+
+        soul_id = hashlib.md5(role.encode()).hexdigest()
+        now = datetime.utcnow().isoformat()
+
+        with self._conn() as conn:
+            conn.execute("""
+                INSERT INTO souls (
+                    soul_id, role, avg_quality, best_quality,
+                    total_runs, best_constitution,
+                    created_at, last_updated
+                )
+                VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+
+                ON CONFLICT(soul_id) DO UPDATE SET
+                    avg_quality = (
+                        souls.avg_quality * souls.total_runs + excluded.avg_quality
+                    ) / (souls.total_runs + 1),
+
+                    best_quality = CASE
+                        WHEN excluded.best_quality > souls.best_quality
+                        THEN excluded.best_quality
+                        ELSE souls.best_quality
+                    END,
+
+                    best_constitution = CASE
+                        WHEN excluded.best_quality > souls.best_quality
+                        THEN excluded.best_constitution
+                        ELSE souls.best_constitution
+                    END,
+
+                    total_runs = souls.total_runs + 1,
+                    last_updated = excluded.last_updated
+            """, (
+                soul_id,
+                role,
+                quality,
+                quality,
+                constitution,
+                now,
+                now
+            ))
+
+            _log("SOUL", role, "UPDATED",
+                f"q={quality:.2f} soul_id={soul_id[:8]}", "P")
 # ══════════════════════════════════════════════════════════════════════
 #  VECTOR DB
-# ══════════════════════════════════════════════════════════════════════
-
+# ══════════════════════════════════════════════════════════════════
 class VectorDB:
     """
     Optional ChromaDB integration.
@@ -1046,7 +1146,7 @@ class Generator:
 
     def generate(self, client, config, agent_id, role, task,
                  tools, project_ctx, depth, fmt,
-                 vdb_enabled=False, retry=False, api_stdlib=""):
+                 vdb_enabled=False, retry=False, api_stdlib="", mem=None):
 
         _log("GEN", "LLM", f"Writing {agent_id}",
              f"d={depth} role={role}", "P")
@@ -1076,6 +1176,31 @@ class Generator:
             "\nRETRY: Keep main() simple. "
             "raw=read_output(x); d=raw if raw is not None else {}; d.get(k). Wrap risky in try/except.\n"
         ) if retry else ""
+        # Soul injection — check for proven pattern for this role
+        soul_hint =""
+        if mem is not None and not retry:
+            
+            threshold = config.get("soul_quality_threshold", 0.7)
+            min_runs  = config.get("soul_min_runs", 3)
+            max_chars = config.get("soul_constitution_max_chars", 800)
+
+            soul = mem.get_soul(role, min_runs=min_runs)
+
+            if (soul
+                   and soul["avg_quality"]       >= threshold
+                   and soul["best_constitution"]):
+                soul_hint = (
+                   f"\nPROVEN PATTERN (from {soul['total_runs']} previous runs, "
+                   f"avg_quality={soul['avg_quality']:.2f}):\n"
+                   f"The following pattern worked well for this role before. "
+                   f"Use it as a reference — adapt it to the current task:\n"
+                   f"{soul['best_constitution'][:max_chars]}\n"
+                )
+                _log("SOUL", role, "INJECTED",
+                    f"q={soul['avg_quality']:.2f} "
+                    f"runs={soul['total_runs']}", "P")
+
+
 
         prompt = (
             "Write def main(): for a Python agent."
@@ -1299,7 +1424,8 @@ class Orchestrator:
             ctx, depth, self.cfg["output_format"],
             vdb_enabled=self.cfg["vector_db_enabled"],
             retry=retry,
-            api_stdlib=self._api_stdlib
+            api_stdlib=self._api_stdlib,
+            mem=self.mem 
         )
         self.consts[aid] = code
 
@@ -1363,15 +1489,26 @@ class Orchestrator:
                     quality_score, info.get("quality", 0.0))
 
         self.mem.finish(aid, ok, quality_score, drift_score, gen_tokens)
+
+        constitution = (self.consts.get(aid) or "")[:2000]
+
         self.mem.deposit_fossil(
             aid, spec["role"], spec["task"][:200],
-            self.consts.get(aid, "")[:2000],
+            constitution,
             quality_score, drift_score, gen_tokens, elapsed, depth)
 
+        # Update soul only on meaningful successful runs
+        if ok and quality_score > 0.05:
+            self.mem.update_soul(
+                role         = spec["role"],
+                quality      = quality_score,
+                constitution = constitution
+            )
+
         _log("ORCH", aid, "LIFECYCLE",
-             f"{'OK' if ok else 'FAILED'} "
-             f"q={quality_score:.2f} d={drift_score:.2f} d={depth}",
-             "G" if ok else "R")
+            f"{'OK' if ok else 'FAILED'} "
+            f"q={quality_score:.2f} d={drift_score:.2f} depth={depth}",
+            "G" if ok else "R")
         return ok
 
     def _run_wave(self, specs, depth=0, label=""):
