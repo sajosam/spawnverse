@@ -11,7 +11,7 @@ leave fossil records, and are protected by guardrails.
 CORE PRINCIPLES:
   1. Zero pre-built agents — everything invented at runtime
   2. Distributed memory — any agent reads all, writes only own namespace
-  3. Parallel wave execution — gather then synthesize
+  3. DAG-based scheduling — agents run as soon as dependencies are met
   4. Fossil record — every dead agent leaves memory for the future
   5. 4-layer guardrails — code scan, budget, output, semantic
   6. OS-level sandbox — CPU/RAM/file limits per subprocess
@@ -19,7 +19,16 @@ CORE PRINCIPLES:
   8. Quality scoring — independent LLM-as-judge on every output
 """
 
-import os, sys, json, sqlite3, subprocess, textwrap, time, argparse, re, hashlib
+import os
+import sys
+import json
+import sqlite3
+import subprocess
+import textwrap
+import time
+import argparse
+import re
+import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from groq import Groq
@@ -29,51 +38,51 @@ from groq import Groq
 # ══════════════════════════════════════════════════════════════════════
 
 DEFAULT_CONFIG = {
-    "model"              : "llama-3.3-70b-versatile",
-    "max_depth"          : 2,
-    "wave1_agents"       : 4,
-    "wave2_agents"       : 4,
-    "parallel"           : True,
-    "max_parallel"       : 4,
-    "timeout_depth0"     : 120,
-    "timeout_depth1"     : 90,
-    "timeout_depth2"     : 60,
-    "retry_failed"       : True,
-    "min_spawn_score"    : 0.4,
-    "token_budget"       : 80000,
-    "per_agent_tokens"   : 8000,
-    "rate_limit_retry"   : 5,
-    "rate_limit_wait"    : 3,
-    "drift_warn"         : 0.45,
-    "quality_min"        : 0.45,
-    "sandbox_enabled"    : True,
-    "sandbox_cpu_sec"    : 60,
-    "sandbox_ram_mb"     : 512,
-    "sandbox_fsize_mb"   : 10,
-    "guardrail_code"     : True,
-    "guardrail_output"   : True,
-    "guardrail_semantic" : True,
-    "vector_db_enabled"  : False,
-    "vector_db_path"     : "spawnverse_vectordb",
-    "rag_top_k"          : 5,
-    "rag_chunk_size"     : 800,
-    "rag_chunk_overlap"  : 100,
-    "output_format"      : "structured",
-    "show_stdout"        : True,
-    "show_messages"      : True,
-    "show_progress"      : True,
-    "db_path"            : "spawnverse.db",
-    "agents_dir"         : ".spawnverse_agents",
+    "model": "llama-3.3-70b-versatile",
+    "max_depth": 2,
+    "wave1_agents": 4,
+    "wave2_agents": 4,
+    "parallel": True,
+    "max_parallel": 4,
+    "timeout_depth0": 120,
+    "timeout_depth1": 90,
+    "timeout_depth2": 60,
+    "retry_failed": True,
+    "min_spawn_score": 0.4,
+    "token_budget": 80000,
+    "per_agent_tokens": 8000,
+    "rate_limit_retry": 5,
+    "rate_limit_wait": 3,
+    "drift_warn": 0.45,
+    "quality_min": 0.45,
+    "sandbox_enabled": True,
+    "sandbox_cpu_sec": 60,
+    "sandbox_ram_mb": 512,
+    "sandbox_fsize_mb": 10,
+    "guardrail_code": True,
+    "guardrail_output": True,
+    "guardrail_semantic": True,
+    "vector_db_enabled": False,
+    "vector_db_path": "spawnverse_vectordb",
+    "rag_top_k": 5,
+    "rag_chunk_size": 800,
+    "rag_chunk_overlap": 100,
+    "output_format": "structured",
+    "show_stdout": True,
+    "show_messages": True,
+    "show_progress": True,
+    "db_path": "spawnverse.db",
+    "agents_dir": ".spawnverse_agents",
 
     # ── External APIs (auto-injected, zero extra installs) ──────────────
     # False = disabled, True = auto-detect from task, list = explicit
     # Example: "external_apis": ["weather", "forex"]
     # Example: "external_apis": True  (LLM decides what task needs)
-    "external_apis"      : False,
-    "external_api_key"   : {},  # {"openweather": "key", ...} for paid APIs
-    "soul_quality_threshold"      : 0.7,
-    "soul_min_runs"               : 3,
-    "soul_constitution_max_chars" : 800,
+    "external_apis": False,
+    "external_api_key": {},  # {"openweather": "key", ...} for paid APIs
+    "soul_quality_threshold": 0.7,
+    "soul_min_runs": 3,
+    "soul_constitution_max_chars": 800,
 }
 
 # ══════════════════════════════════════════════════════════════════════
@@ -87,7 +96,8 @@ C = {
     "Y": "\033[93m", "C": "\033[96m", "R": "\033[91m",
     "W": "\033[37m", "X": "\033[90m", "P": "\033[35m",
 }
-RST = "\033[0m"; BOLD = "\033[1m"
+RST = "\033[0m"
+BOLD = "\033[1m"
 
 
 def _make_client(config):
@@ -169,7 +179,11 @@ class DistributedMemory:
         self._init()
 
     def _conn(self):
-        c = sqlite3.connect(self.cfg["db_path"], timeout=20)
+        path = self.cfg["db_path"]
+        if path.startswith("file:") or path == ":memory:":
+            c = sqlite3.connect(path, uri=True, timeout=20)
+        else:
+            c = sqlite3.connect(path, timeout=20)
         c.execute("PRAGMA journal_mode=WAL")
         c.execute("PRAGMA synchronous=NORMAL")
         return c
@@ -216,16 +230,23 @@ class DistributedMemory:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     agent_id TEXT, layer TEXT,
                     verdict TEXT, detail TEXT, ts TEXT);
+                CREATE TABLE IF NOT EXISTS intent_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT, agent_id TEXT, role TEXT,
+                    drift REAL DEFAULT 0.0, quality REAL DEFAULT 0.0,
+                    contribution TEXT, wave TEXT DEFAULT 'gathering',
+                    ts TEXT);            
                 CREATE TABLE IF NOT EXISTS souls (
-                        soul_id TEXT PRIMARY KEY,
-                        role TEXT UNIQUE NOT NULL,
-                        avg_quality REAL DEFAULT 0.0,
-                        total_runs INTEGER DEFAULT 0,
-                        best_constitution TEXT,
-                        best_quality REAL DEFAULT 0.0,  
-                        created_at TEXT,
-                        last_updated TEXT);                           
+                    soul_id TEXT PRIMARY KEY,
+                    role TEXT UNIQUE NOT NULL,
+                    avg_quality REAL DEFAULT 0.0,
+                    total_runs INTEGER DEFAULT 0,
+                    best_constitution TEXT,
+                    best_quality REAL DEFAULT 0.0,  
+                    created_at TEXT,
+                    last_updated TEXT);                           
 
+                
             """)
 
     def read(self, namespace, key):
@@ -313,16 +334,22 @@ class DistributedMemory:
 
     def stats(self):
         with self._conn() as c:
-            t  = c.execute("SELECT COUNT(*) FROM agents").fetchone()[0]
-            ok = c.execute("SELECT COUNT(*) FROM agents WHERE success=1").fetchone()[0]
-            fl = c.execute("SELECT COUNT(*) FROM agents WHERE status='failed'").fetchone()[0]
+            t = c.execute("SELECT COUNT(*) FROM agents").fetchone()[0]
+            ok = c.execute(
+                "SELECT COUNT(*) FROM agents WHERE success=1").fetchone()[0]
+            fl = c.execute(
+                "SELECT COUNT(*) FROM agents WHERE status='failed'").fetchone()[0]
             ms = c.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
             sp = c.execute("SELECT COUNT(*) FROM spawns").fetchone()[0]
-            rj = c.execute("SELECT COUNT(*) FROM spawns WHERE status='rejected'").fetchone()[0]
+            rj = c.execute(
+                "SELECT COUNT(*) FROM spawns WHERE status='rejected'").fetchone()[0]
             fo = c.execute("SELECT COUNT(*) FROM fossils").fetchone()[0]
-            gb = c.execute("SELECT COUNT(*) FROM guardrail_log WHERE verdict='blocked'").fetchone()[0]
-            aq = c.execute("SELECT AVG(quality) FROM agents WHERE success=1").fetchone()[0] or 0
-            ad = c.execute("SELECT AVG(drift)   FROM agents WHERE success=1").fetchone()[0] or 0
+            gb = c.execute(
+                "SELECT COUNT(*) FROM guardrail_log WHERE verdict='blocked'").fetchone()[0]
+            aq = c.execute("SELECT AVG(quality) FROM agents WHERE success=1").fetchone()[
+                0] or 0
+            ad = c.execute("SELECT AVG(drift)   FROM agents WHERE success=1").fetchone()[
+                0] or 0
         return {"agents": t, "success": ok, "failed": fl,
                 "messages": ms, "spawns": sp, "spawn_rejected": rj,
                 "fossils": fo, "guardrail_blocked": gb,
@@ -403,14 +430,7 @@ class DistributedMemory:
                  datetime.now().isoformat()))
 
     def get_soul(self, role: str, min_runs: int = 3) -> dict | None:
-        """
-        Fetch the soul for a given role.
-        Returns None if no valid soul exists.
-        Conditions:
-            - total_runs >= min_runs
-            - avg_quality > 0.0
-        """
-        role = role.strip().lower() if role else None
+        role = role.strip().lower()[:50] if role else None
         if not role:
             return None
         with self._conn() as conn:
@@ -418,29 +438,28 @@ class DistributedMemory:
                 col[0]: row[idx]
                 for idx, col in enumerate(cursor.description)
             }
-        return conn.execute(
-            """
-            SELECT soul_id, role, avg_quality, best_quality,
-                   total_runs, best_constitution
-            FROM souls
-            WHERE role = ?
-              AND total_runs >= ?
-              AND avg_quality > ?
-            LIMIT 1
-            """,
-            (role, min_runs, 0.0)
-        ).fetchone()
-    
+            return conn.execute(
+                """
+                SELECT soul_id, role, avg_quality, best_quality,
+                        total_runs, best_constitution
+                FROM souls
+                WHERE role = ?
+                    AND total_runs >= ?
+                    AND avg_quality > 0.0
+                LIMIT 1
+                """,
+                (role, min_runs)
+            ).fetchone()
+
     def update_soul(self, role: str, quality: float, constitution: str) -> None:
         """
-        Insert or update a soul entry.
-
+        Insert or update a soul entry.   
             - Deterministic soul_id from normalized role
             - Running average update
             - best_constitution updated ONLY when quality strictly improves best_quality
             """
 
-        role = role.strip().lower() if role else None
+        role = role.strip().lower()[:50] if role else None
         if not role:
             _log("SOUL", "update_soul", "SKIPPED", "empty role", "Y")
             return
@@ -490,10 +509,59 @@ class DistributedMemory:
             ))
 
             _log("SOUL", role, "UPDATED",
-                f"q={quality:.2f} soul_id={soul_id[:8]}", "P")
+                 f"q={quality:.2f} soul_id={soul_id[:8]}", "P")
+            
+    def increment_soul_attempts(self, role: str) -> None:
+        """
+        Increment total_runs on failure without affecting avg_quality.
+        Ensures failed runs count toward the min_runs confidence gate.
+        """
+        role = role.strip().lower()[:50] if role else None
+        if not role:
+            return
+        soul_id = hashlib.md5(role.encode()).hexdigest()
+        now = datetime.utcnow().isoformat()
+        with self._conn() as conn:
+            conn.execute("""
+                INSERT INTO souls (
+                    soul_id, role, avg_quality, best_quality,
+                    total_runs, best_constitution,
+                    created_at, last_updated
+                )
+                VALUES (?, ?, 0.0, 0.0, 1, NULL, ?, ?)
+                ON CONFLICT(soul_id) DO UPDATE SET
+                    total_runs   = souls.total_runs + 1,
+                    last_updated = excluded.last_updated
+            """, (soul_id, role, now, now))
+        _log("SOUL", role, "ATTEMPT_COUNTED", "failed run recorded", "Y")        
+            
+    def log_intent(self, run_id, agent_id, role, drift, quality,
+                   contribution="", wave="gathering"):
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO intent_log "
+                "(run_id,agent_id,role,drift,quality,contribution,wave,ts) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (run_id, agent_id, role[:80], round(drift, 3),
+                 round(quality, 3), contribution[:200], wave,
+                 datetime.now().isoformat()))
+
+    def intent_summary(self, run_id):
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT agent_id, role, drift, quality, contribution, wave "
+                "FROM intent_log WHERE run_id=? ORDER BY ts",
+                (run_id,)).fetchall()
+        return [
+            {"agent_id": r[0], "role": r[1], "drift": r[2],
+             "quality": r[3], "contribution": r[4], "wave": r[5]}
+            for r in rows
+        ]        
 # ══════════════════════════════════════════════════════════════════════
 #  VECTOR DB
 # ══════════════════════════════════════════════════════════════════
+
+
 class VectorDB:
     """
     Optional ChromaDB integration.
@@ -527,7 +595,7 @@ class VectorDB:
 
     def _chunk(self, text):
         size = self.cfg["rag_chunk_size"]
-        lap  = self.cfg["rag_chunk_overlap"]
+        lap = self.cfg["rag_chunk_overlap"]
         chunks, i = [], 0
         while i < len(text):
             chunks.append(text[i:i + size])
@@ -563,16 +631,16 @@ class VectorDB:
     def search(self, query, n=None, collection="knowledge"):
         if not self._ready:
             return []
-        n   = n or self.cfg["rag_top_k"]
+        n = n or self.cfg["rag_top_k"]
         col = {"knowledge": self._knowledge,
                "fossils":   self._fossils,
                "context":   self._context}.get(collection, self._knowledge)
         if col.count() == 0:
             return []
         try:
-            res   = col.query(query_texts=[query],
-                              n_results=min(n, col.count()))
-            docs  = res.get("documents",  [[]])[0]
+            res = col.query(query_texts=[query],
+                            n_results=min(n, col.count()))
+            docs = res.get("documents",  [[]])[0]
             dists = res.get("distances",  [[]])[0]
             metas = res.get("metadatas",  [[]])[0]
             return [{"text": d, "score": round(1 - s, 3),
@@ -665,12 +733,12 @@ class Guardrails:
             "Return ONLY the JSON."
         )
         text, _ = _llm(client, config,
-                        [{"role": "system",
-                          "content": "Return ONLY valid JSON. Start with {."},
-                         {"role": "user", "content": prompt}],
-                        max_tokens=150)
+                       [{"role": "system",
+                         "content": "Return ONLY valid JSON. Start with {."},
+                        {"role": "user", "content": prompt}],
+                       max_tokens=150)
         r = _safe_json(text)
-        safe   = bool(r.get("safe", True))
+        safe = bool(r.get("safe", True))
         reason = r.get("reason", "unknown")
         if not safe:
             _log("GUARD", agent_id, "SEMANTIC_BLOCKED", reason, "R")
@@ -688,17 +756,17 @@ class IntentDriftScorer:
                 v for v in output.values() if v)):
             return 0.5
         text, _ = _llm(client, config,
-                        [{"role": "system",
-                          "content": "Return ONLY valid JSON. Start with {."},
-                         {"role": "user",
-                          "content": (
-                              f"Score 0.0-1.0: does this output address the task?\n"
-                              f"TASK: {task[:150]}\nROLE: {role}\n"
-                              f"OUTPUT (first 300 chars): {str(output)[:300]}\n"
-                              "1.0=fully addresses task. 0.0=completely unrelated.\n"
-                              'Return ONLY: {"score": 0.X}'
-                          )}],
-                        max_tokens=80)
+                       [{"role": "system",
+                         "content": "Return ONLY valid JSON. Start with {."},
+                        {"role": "user",
+                         "content": (
+                             f"Score 0.0-1.0: does this output address the task?\n"
+                             f"TASK: {task[:150]}\nROLE: {role}\n"
+                             f"OUTPUT (first 300 chars): {str(output)[:300]}\n"
+                             "1.0=fully addresses task. 0.0=completely unrelated.\n"
+                             'Return ONLY: {"score": 0.X}'
+                         )}],
+                       max_tokens=80)
         r = _safe_json(text)
         raw = r.get("score", 0.5)
         try:
@@ -720,16 +788,16 @@ class OutputQualityScorer:
         if len(output_str) < 100 and any(u in output_str for u in USELESS):
             return 0.05  # near-zero — basically empty
         text, _ = _llm(client, config,
-                        [{"role": "system",
-                          "content": "Return ONLY valid JSON. Start with {."},
-                         {"role": "user",
-                          "content": (
-                              f"Score output quality 0.0-1.0.\n"
-                              f"TASK: {task[:150]}\nOUTPUT: {str(output)[:300]}\n"
-                              "1.0=excellent specific answer. 0.0=empty or wrong domain.\n"
-                              'Return ONLY: {"score": 0.X}'
-                          )}],
-                        max_tokens=80)
+                       [{"role": "system",
+                         "content": "Return ONLY valid JSON. Start with {."},
+                        {"role": "user",
+                         "content": (
+                             f"Score output quality 0.0-1.0.\n"
+                             f"TASK: {task[:150]}\nOUTPUT: {str(output)[:300]}\n"
+                             "1.0=excellent specific answer. 0.0=empty or wrong domain.\n"
+                             'Return ONLY: {"score": 0.X}'
+                         )}],
+                       max_tokens=80)
         r = _safe_json(text)
         raw = r.get("score", 0.5)
         try:
@@ -766,19 +834,17 @@ class SpawnScorer:
         return round(min(s, 1.0), 2)
 
 
-
 # ══════════════════════════════════════════════════════════════════════
 #  EXTERNAL API REGISTRY
 #  All helpers use stdlib urllib — zero extra pip installs.
 #  Auto-injected into agent stdlib when external_apis is enabled.
 # ══════════════════════════════════════════════════════════════════════
-
 # Registry: keyword → (stdlib_code, description, hint_for_agents)
 _API_REGISTRY = {
     "weather": {
-        "keywords": ["weather","temperature","climate","forecast","rain","snow","sunny"],
-        "hint"    : "get_weather(city) → {temp_c, desc, humidity, wind_kmph}",
-        "code"    : """
+        "keywords": ["weather", "temperature", "climate", "forecast", "rain", "snow", "sunny"],
+        "hint": "get_weather(city) → {temp_c, desc, humidity, wind_kmph}",
+        "code": """
 def get_weather(city):
     \"\"\"Real weather from wttr.in — no API key needed.\"\"\"
     import urllib.request as _r, urllib.parse as _p, json as _j
@@ -794,9 +860,9 @@ def get_weather(city):
 """
     },
     "forex": {
-        "keywords": ["exchange rate","forex","currency","convert","inr","usd","eur","jpy","gbp","aed"],
-        "hint"    : "get_rate(base, target) → float rate or None",
-        "code"    : """
+        "keywords": ["exchange rate", "forex", "currency", "convert", "inr", "usd", "eur", "jpy", "gbp", "aed"],
+        "hint": "get_rate(base, target) → float rate or None",
+        "code": """
 def get_rate(base, target):
     \"\"\"Live forex rate from open.er-api.com — no key needed.\"\"\"
     import urllib.request as _r, json as _j
@@ -810,9 +876,9 @@ def get_rate(base, target):
 """
     },
     "country": {
-        "keywords": ["country","nation","capital","population","language","region","visa","citizenship"],
-        "hint"    : "get_country(name) → {name, capital, population, region, languages, currencies, timezones}",
-        "code"    : """
+        "keywords": ["country", "nation", "capital", "population", "language", "region", "visa", "citizenship"],
+        "hint": "get_country(name) → {name, capital, population, region, languages, currencies, timezones}",
+        "code": """
 def get_country(name):
     \"\"\"Country info from restcountries.com — no key needed.\"\"\"
     import urllib.request as _r, urllib.parse as _p, json as _j
@@ -830,9 +896,9 @@ def get_country(name):
 """
     },
     "holidays": {
-        "keywords": ["holiday","public holiday","national day","festival","celebration"],
-        "hint"    : "get_holidays(country_code, year) → [{date, name}, ...]",
-        "code"    : """
+        "keywords": ["holiday", "public holiday", "national day", "festival", "celebration"],
+        "hint": "get_holidays(country_code, year) → [{date, name}, ...]",
+        "code": """
 def get_holidays(country_code, year=2025):
     \"\"\"Public holidays from date.nager.at — no key needed.\"\"\"
     import urllib.request as _r, json as _j
@@ -845,9 +911,9 @@ def get_holidays(country_code, year=2025):
 """
     },
     "crypto": {
-        "keywords": ["bitcoin","ethereum","crypto","btc","eth","sol","blockchain","token","coin","defi"],
-        "hint"    : "get_crypto(symbol) → {usd, inr} prices or None",
-        "code"    : """
+        "keywords": ["bitcoin", "ethereum", "crypto", "btc", "eth", "sol", "blockchain", "token", "coin", "defi"],
+        "hint": "get_crypto(symbol) → {usd, inr} prices or None",
+        "code": """
 def get_crypto(symbol='BTC'):
     \"\"\"Crypto price from CoinGecko — no key needed.\"\"\"
     import urllib.request as _r, json as _j
@@ -863,9 +929,9 @@ def get_crypto(symbol='BTC'):
 """
     },
     "news": {
-        "keywords": ["news","latest","headlines","article","media","press","breaking"],
-        "hint"    : "get_news(topic) → [{title, url, source}, ...] (via HackerNews)",
-        "code"    : """
+        "keywords": ["news", "latest", "headlines", "article", "media", "press", "breaking"],
+        "hint": "get_news(topic) → [{title, url, source}, ...] (via HackerNews)",
+        "code": """
 def get_news(topic=None):
     \"\"\"Latest HackerNews top stories — no key needed.\"\"\"
     import urllib.request as _r, json as _j
@@ -936,7 +1002,8 @@ def _build_api_stdlib(api_names: list, api_keys: dict = None) -> str:
     """Build the stdlib code for the detected APIs."""
     if not api_names:
         return ""
-    parts = ["\n# ── External API Helpers (auto-injected by SpawnVerse) ─────────"]
+    parts = [
+        "\n# ── External API Helpers (auto-injected by SpawnVerse) ─────────"]
     hints = []
     for name in api_names:
         if name in _API_REGISTRY:
@@ -964,16 +1031,16 @@ def _build_stdlib(agent_id, config, vdb_enabled=False, api_stdlib=""):
     LLM only writes the main() function.
     Implements the distributed memory READ/WRITE contract.
     """
-    db  = config["db_path"]
+    db = config["db_path"]
     mdl = config["model"]
     dep = config["max_depth"]
-    rl  = config["rate_limit_retry"]
-    rw  = config["rate_limit_wait"]
-    tb  = config["token_budget"]
-    pa  = config["per_agent_tokens"]
-    vp  = config["vector_db_path"]
-    tk  = config["rag_top_k"]
-    ve  = vdb_enabled
+    rl = config["rate_limit_retry"]
+    rw = config["rate_limit_wait"]
+    tb = config["token_budget"]
+    pa = config["per_agent_tokens"]
+    vp = config["vector_db_path"]
+    tk = config["rag_top_k"]
+    ve = vdb_enabled
 
     stdlib = "\n".join([
         "import sys, json, sqlite3, os, time, hashlib",
@@ -1146,7 +1213,7 @@ class Generator:
 
     def generate(self, client, config, agent_id, role, task,
                  tools, project_ctx, depth, fmt,
-                 vdb_enabled=False, retry=False, api_stdlib="", mem=None):
+                 vdb_enabled=False, retry=False, api_stdlib="", mem=None, guard=None):
 
         _log("GEN", "LLM", f"Writing {agent_id}",
              f"d={depth} role={role}", "P")
@@ -1177,35 +1244,41 @@ class Generator:
             "raw=read_output(x); d=raw if raw is not None else {}; d.get(k). Wrap risky in try/except.\n"
         ) if retry else ""
         # Soul injection — check for proven pattern for this role
-        soul_hint =""
+        soul_hint = ""
         if mem is not None and not retry:
-            
+
             threshold = config.get("soul_quality_threshold", 0.7)
-            min_runs  = config.get("soul_min_runs", 3)
+            min_runs = config.get("soul_min_runs", 3)
             max_chars = config.get("soul_constitution_max_chars", 800)
 
             soul = mem.get_soul(role, min_runs=min_runs)
 
             if (soul
-                   and soul["avg_quality"]       >= threshold
-                   and soul["best_constitution"]):
-                soul_hint = (
-                   f"\nPROVEN PATTERN (from {soul['total_runs']} previous runs, "
-                   f"avg_quality={soul['avg_quality']:.2f}):\n"
-                   f"The following pattern worked well for this role before. "
-                   f"Use it as a reference — adapt it to the current task:\n"
-                   f"{soul['best_constitution'][:max_chars]}\n"
-                )
-                _log("SOUL", role, "INJECTED",
-                    f"q={soul['avg_quality']:.2f} "
-                    f"runs={soul['total_runs']}", "P")
-
-
+                    and soul["avg_quality"]       >= threshold
+                    and soul["total_runs"]         >= min_runs
+                    and soul["best_constitution"]):
+                # Scan constitution before injecting — block if unsafe
+                if guard and not guard.scan_code(soul["best_constitution"])[0]:             
+                    _log("SOUL", role, "INJECT_BLOCKED",
+                        "constitution failed guardrail scan", "R")
+                else:
+                    soul_hint = (
+                        f"\nPROVEN PATTERN (from {soul['total_runs']} previous runs, "
+                        f"avg_quality={soul['avg_quality']:.2f}):\n"
+                        f"The following pattern worked well for this role before. "
+                        f"Use it as a reference — adapt it to the current task:\n"
+                        f"{soul['best_constitution'][:max_chars]}\n"
+                    )
+                    _log("SOUL", role, "INJECTED",
+                        f"q={soul['avg_quality']:.2f} "
+                        f"runs={soul['total_runs']}", "P")
 
         prompt = (
             "Write def main(): for a Python agent."
             " All helpers already defined. Do NOT redefine them.\n"
-            + retry_note + "\n"
+            + retry_note 
+            + soul_hint 
+            + "\n"
             f"AGENT: {agent_id}  ROLE: {role}  DEPTH: {depth}\n"
             f"TASK: {task}\n"
             f"CTX: {str(project_ctx)[:400]}\n\n"
@@ -1266,8 +1339,8 @@ class Generator:
 
         stdlib = _build_stdlib(agent_id, config, vdb_enabled,
                                api_stdlib=api_stdlib)
-        final  = (f"# AGENT: {agent_id}  depth={depth}\n\n"
-                  + stdlib + "\n\n" + text + "\n\nmain()\n")
+        final = (f"# AGENT: {agent_id}  depth={depth}\n\n"
+                 + stdlib + "\n\n" + text + "\n\nmain()\n")
 
         _log("LLM", "GEN", "DONE",
              f"{len(final):,} chars  tokens={tokens}", "G")
@@ -1296,7 +1369,7 @@ class Executor:
 
     def run(self, agent_id, code, config, depth=0,
             guardrails=None, mem=None):
-        path    = os.path.join(config["agents_dir"], f"{agent_id}.py")
+        path = os.path.join(config["agents_dir"], f"{agent_id}.py")
         timeout = config.get(f"timeout_depth{min(depth, 2)}", 60)
 
         # Guardrail Layer 1: code scan
@@ -1324,7 +1397,7 @@ class Executor:
         if os.name != "nt" and config.get("sandbox_enabled"):
             kwargs["preexec_fn"] = self._preexec(config)
 
-        result  = subprocess.run([sys.executable, path], **kwargs)
+        result = subprocess.run([sys.executable, path], **kwargs)
         elapsed = round(time.time() - t0, 1)
 
         if config["show_stdout"]:
@@ -1349,28 +1422,156 @@ class Executor:
 
 
 # ══════════════════════════════════════════════════════════════════════
+#  INTENT TRACKER
+#  System-level alignment view across all agents in a run.
+#  Wires into _spawn() — zero changes to existing code paths.
+# ══════════════════════════════════════════════════════════════════════
+
+class IntentTracker:
+    """
+    Tracks intent alignment at system level, not just per agent.
+
+    After each agent completes, _spawn() calls track().
+    At the end of run(), print_report() renders the full alignment graph.
+    """
+
+    WEAK_THRESHOLD = 0.45   # below this = weak link
+    WARN_THRESHOLD = 0.65   # below this = caution
+
+    def __init__(self, run_id: str, task_desc: str, mem: "DistributedMemory"):
+        self.run_id = run_id
+        self.task_desc = task_desc
+        self.mem = mem
+        self._entries: list = []   # in-memory mirror for the report
+
+    def track(self, agent_id: str, role: str, drift: float, quality: float,
+              output, wave: str = "gathering") -> None:
+        """Called from _spawn() immediately after SCORES are logged."""
+        # Derive a one-line contribution from output keys (no LLM call)
+        contribution = self._summarise(agent_id, output)
+        self._entries.append({
+            "agent_id": agent_id,
+            "role": role,
+            "drift": round(drift, 3),
+            "quality": round(quality, 3),
+            "contribution": contribution,
+            "wave": wave,
+        })
+        self.mem.log_intent(
+            self.run_id, agent_id, role, drift, quality, contribution, wave)
+
+    def _summarise(self, agent_id: str, output) -> str:
+        """Lightweight contribution label — no LLM token cost."""
+        if not output:
+            return "no output"
+        if isinstance(output, list):
+            first = output[0] if output else {}
+            keys = [str(k) for k in first.keys() if str(k) != "raw"][:3] \
+                if isinstance(first, dict) else []
+            label = ", ".join(keys)
+            return (f"{agent_id}: list[{len(output)}] [{label}]"
+                    if keys else f"{agent_id}: list[{len(output)}]")
+        if not isinstance(output, dict):
+            return "no output"
+        keys = [str(k) for k in output.keys() if str(k) != "raw"][:4]
+        return f"{agent_id}: [{', '.join(keys)}]" if keys else "empty result"
+
+    def print_report(self) -> None:
+        if not self._entries:
+            return
+
+        drifts = [e["drift"] for e in self._entries]
+        qualities = [e["quality"] for e in self._entries]
+        sys_drift = round(sum(drifts) / len(drifts), 3)
+        sys_qual = round(sum(qualities) / len(qualities), 3)
+
+        weak = [e for e in self._entries if e["drift"] < self.WEAK_THRESHOLD]
+        caution = [e for e in self._entries if
+                   self.WEAK_THRESHOLD <= e["drift"] < self.WARN_THRESHOLD]
+
+        # Split by wave for chain analysis
+        gathering = [e for e in self._entries if e["wave"] == "gathering"]
+        synthesis = [e for e in self._entries if e["wave"] == "synthesis"]
+        g_avg = (round(sum(e["drift"] for e in gathering) / len(gathering), 3)
+                 if gathering else None)
+        s_avg = (round(sum(e["drift"] for e in synthesis) / len(synthesis), 3)
+                 if synthesis else None)
+
+        div = "═" * 66
+        sdiv = "─" * 66
+
+        print(f"\n{div}")
+        print(f"  INTENT ALIGNMENT REPORT")
+        print(f"  Task: {self.task_desc[:60]}")
+        print(f"{sdiv}")
+        print(f"  System Alignment     : {sys_drift:.2f}  "
+              f"{self._bar(sys_drift)}  quality={sys_qual:.2f}")
+        print()
+        print(f"  AGENT CONTRIBUTIONS  ({len(self._entries)} agents):")
+        for e in self._entries:
+            d = e["drift"]
+            flag = ("  ✅" if d >= self.WARN_THRESHOLD else
+                    "  ⚠️" if d >= self.WEAK_THRESHOLD else
+                    "  🔴 WEAK LINK")
+            aid_short = e["agent_id"][:30]
+            print(f"    {aid_short:<30}  drift={d:.2f}  {self._bar(d)}{flag}")
+            print(f"    {'':30}  {e['contribution'][:60]}")
+
+        if weak:
+            print(f"\n  🔴 WEAK LINKS  (drift < {self.WEAK_THRESHOLD}):")
+            for e in weak:
+                print(f"    {e['agent_id']}  drift={e['drift']:.2f}")
+                print(f"    → May have drifted from: {self.task_desc[:50]}")
+        elif caution:
+            print(f"\n  ⚠️  CAUTION (drift < {self.WARN_THRESHOLD}):")
+            for e in caution:
+                print(f"    {e['agent_id']}  drift={e['drift']:.2f}")
+        else:
+            print(f"\n  ✅ All agents stayed aligned to task")
+
+        if g_avg is not None or s_avg is not None:
+            print(f"\n  CHAIN ANALYSIS:")
+            if g_avg is not None:
+                print(
+                    f"    Gathering wave avg drift : {g_avg:.2f}  {self._bar(g_avg)}")
+            if s_avg is not None:
+                delta = round(s_avg - g_avg, 3) if g_avg is not None else 0
+                sign = "+" if delta >= 0 else ""
+                print(f"    Synthesis wave avg drift : {s_avg:.2f}  {self._bar(s_avg)}"
+                      f"  ({sign}{delta} vs gathering)")
+
+        print(f"{div}\n")
+
+    @staticmethod
+    def _bar(score: float, width: int = 10) -> str:
+        filled = round(score * width)
+        return "█" * filled + "░" * (width - filled)
+
+# ══════════════════════════════════════════════════════════════════════
 #  ORCHESTRATOR — the only thing that exists before the task
 # ══════════════════════════════════════════════════════════════════════
+
 
 class Orchestrator:
 
     def __init__(self, config=None):
-        self.cfg    = {**DEFAULT_CONFIG, **(config or {})}
+        self.cfg = {**DEFAULT_CONFIG, **(config or {})}
         self.client = _make_client(self.cfg)
-        self.mem    = DistributedMemory(self.cfg)
-        self.vdb    = VectorDB(self.cfg)
-        self.guard  = Guardrails()
-        self.gen    = Generator()
-        self.exe    = Executor()
-        self.drift  = IntentDriftScorer()
+        self.mem = DistributedMemory(self.cfg)
+        self.vdb = VectorDB(self.cfg)
+        self.guard = Guardrails()
+        self.gen = Generator()
+        self.exe = Executor()
+        self.drift = IntentDriftScorer()
         self.quality = OutputQualityScorer()
         self.spawner = SpawnScorer()
-        self.t0      = time.time()
-        self.run_id  = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.t0 = time.time()
+        self.run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.consts: dict = {}
+        self.intent: IntentTracker | None = None  # set in run()
 
         # Auto-detect and pre-build external API stdlib
-        self._api_names  = []   # resolved after task arrives
+        self._api_names = []   # resolved after task arrives
         self._api_stdlib = ""   # built once during run()
 
         _log("ORCH", "SYSTEM", "BOOT",
@@ -1403,17 +1604,17 @@ class Orchestrator:
         self.mem.set_system("task_desc", task_desc)
         _log("ORCH", "ALL", "PLAN",
              "\n".join(
-                 f"  [{i+1}] {a.get('agent_id','?'):28s} "
-                 f"deps={a.get('depends_on',[])} | {a.get('role','')[:50]}"
+                 f"  [{i+1}] {a.get('agent_id', '?'):28s} "
+                 f"deps={a.get('depends_on', [])} | {a.get('role', '')[:50]}"
                  for i, a in enumerate(agents)
              ), "Y")
         return agents
 
     def _spawn(self, spec, spawned_by="orchestrator",
                depth=0, retry=False):
-        aid       = spec["agent_id"]
+        aid = spec["agent_id"]
         task_desc = self.mem.get_system("task_desc") or ""
-        ctx       = self.mem.get_system("project") or {}
+        ctx = self.mem.get_system("project") or {}
 
         self.mem.register(aid, spec["role"], spawned_by, depth)
 
@@ -1425,7 +1626,8 @@ class Orchestrator:
             vdb_enabled=self.cfg["vector_db_enabled"],
             retry=retry,
             api_stdlib=self._api_stdlib,
-            mem=self.mem 
+            mem=self.mem,
+            guard=self.guard
         )
         self.consts[aid] = code
 
@@ -1448,7 +1650,7 @@ class Orchestrator:
                 aid, code2, self.cfg, depth, self.guard, self.mem)
 
         quality_score = 0.0
-        drift_score   = 0.5
+        drift_score = 0.5
 
         if ok:
             output = self.mem.read(aid, "result") or {}
@@ -1471,7 +1673,7 @@ class Orchestrator:
             if ok:
                 quality_score = self.quality.score(
                     spec["task"], output, self.client, self.cfg)
-                drift_score   = self.drift.score(
+                drift_score = self.drift.score(
                     task_desc, spec["role"], output, self.client, self.cfg)
 
                 if self.cfg["vector_db_enabled"]:
@@ -1480,6 +1682,14 @@ class Orchestrator:
 
                 _log("ORCH", aid, "SCORES",
                      f"quality={quality_score:.2f} drift={drift_score:.2f}", "C")
+
+                # Record in intent tracking system
+                if self.intent is not None:
+                    wave = ("synthesis" if spec.get("depends_on")
+                            else "gathering")
+                    self.intent.track(
+                        aid, spec["role"], drift_score,
+                        quality_score, output, wave)
 
         for other in self.mem.completed_agents():
             if other != aid:
@@ -1498,17 +1708,24 @@ class Orchestrator:
             quality_score, drift_score, gen_tokens, elapsed, depth)
 
         # Update soul only on meaningful successful runs
+        # Soul update — distinguish success from failure
         if ok and quality_score > 0.05:
+        # Successful run — update quality and potentially best constitution
             self.mem.update_soul(
-                role         = spec["role"],
-                quality      = quality_score,
-                constitution = constitution
+                role=spec["role"],
+                quality=quality_score,
+                constitution=constitution
             )
+        elif not ok:
+            # Failed run — only increment attempts, never touch avg_quality
+            self.mem.increment_soul_attempts(spec["role"])
+        # quality_score <= 0.05 on success — agent ran but produced nothing meaningful
+        # Silently skip — not worth recording
 
         _log("ORCH", aid, "LIFECYCLE",
-            f"{'OK' if ok else 'FAILED'} "
-            f"q={quality_score:.2f} d={drift_score:.2f} depth={depth}",
-            "G" if ok else "R")
+             f"{'OK' if ok else 'FAILED'} "
+             f"q={quality_score:.2f} d={drift_score:.2f} depth={depth}",
+             "G" if ok else "R")
         return ok
 
     def _run_wave(self, specs, depth=0, label=""):
@@ -1533,17 +1750,25 @@ class Orchestrator:
             for s in specs:
                 self._spawn(s, depth=depth)
 
-    def _handle_spawns(self):
-        pending = self.mem.pending_spawns()
-        if not pending:
+    def _handle_spawns(self, pending: list, completed: set) -> None:
+        """
+        Process pending spawn requests.
+        Approved agents are appended directly to the pending pool
+        so the DAG scheduler picks them up in the next iteration.
+        """
+        spawn_requests = self.mem.pending_spawns()
+        if not spawn_requests:
             return
-        _log("ORCH", "SPAWNS", "CHECK", f"{len(pending)} pending", "M")
-        plan = self.mem.get_system("plan") or []
-        ran  = {a["agent_id"] for a in plan}
 
-        for req in pending:
+        _log("ORCH", "SPAWNS", "CHECK",
+             f"{len(spawn_requests)} pending", "M")
+
+        existing_ids = {a["agent_id"] for a in pending} | completed
+
+        for req in spawn_requests:
             score = self.spawner.score(
-                req["name"], req["role"], req["task"], ran)
+                req["name"], req["role"], req["task"], existing_ids)
+
             reject = None
             if req["depth"] > self.cfg["max_depth"]:
                 reject = f"depth {req['depth']} > max"
@@ -1553,19 +1778,29 @@ class Orchestrator:
                 reject = "role too short"
             elif len(req["task"]) < 20:
                 reject = "task too short"
-            elif req["name"] in ran:
+            elif req["name"] in existing_ids:
                 reject = "duplicate"
+
             if reject:
                 _log("ORCH", req["name"], "SPAWN_REJECTED", reject, "Y")
                 self.mem.close_spawn(req["id"], "rejected")
                 continue
-            ran.add(req["name"])
-            self._spawn(
-                {"agent_id": req["name"], "role": req["role"],
-                 "task": req["task"], "tools_needed": req["tools"],
-                 "depends_on": []},
-                spawned_by=req["by"], depth=req["depth"])
+
+            new_spec = {
+                "agent_id": req["name"],
+                "role": req["role"],
+                "task": req["task"],
+                "tools_needed": req["tools"],
+                "depends_on": []
+            }
+
+            # Add to live pending pool directly — no DB round-trip needed
+            pending.append(new_spec)
+            existing_ids.add(req["name"])
             self.mem.close_spawn(req["id"])
+
+            _log("ORCH", req["name"], "SPAWN_QUEUED",
+                 "added to DAG pending pool", "Y")
 
     def run(self, task, knowledge_base=None):
         """
@@ -1582,8 +1817,8 @@ class Orchestrator:
         _tokens_used = 0  # reset for each new run
 
         desc = task["description"]
-        ctx  = task.get("context", {})
-        fmt  = self.cfg["output_format"]
+        ctx = task.get("context", {})
+        fmt = self.cfg["output_format"]
 
         print(f"\n{'═'*66}")
         print(f"  SPAWNVERSE  —  Self-Spawning Cognitive Agent System")
@@ -1615,17 +1850,68 @@ class Orchestrator:
 
         print(f"\n{'─'*66}\n  PHASE 1 — DECOMPOSE TASK\n{'─'*66}\n")
         agents = self._decompose(desc, fmt)
-        wave1  = [a for a in agents if not a.get("depends_on")]
-        wave2  = [a for a in agents if     a.get("depends_on")]
 
-        self._run_wave(wave1, depth=0,
-                       label="PHASE 2 — WAVE 1  Gathering (parallel)")
-        self._handle_spawns()
+        # Initialise intent tracker for this run
+        self.intent = IntentTracker(self.run_id, desc, self.mem)
 
-        if wave2:
-            self._run_wave(wave2, depth=0,
-                           label="PHASE 3 — WAVE 2  Synthesis")
-            self._handle_spawns()
+        print(f"\n{'─'*66}\n  PHASE 2 — DAG SCHEDULING\n{'─'*66}\n")
+
+        # ── DAG scheduling loop ───────────────────────────────────────────
+        pending = list(agents)
+        completed = set()
+        iteration = 1
+
+        while pending:
+            ready = [
+                a for a in pending
+                if set(a.get("depends_on", [])).issubset(completed)
+            ]
+
+            # Deadlock detection
+            if not ready:
+                all_ids = {a["agent_id"] for a in pending} | completed
+                for a in pending:
+                    for dep in a.get("depends_on", []):
+                        if dep not in all_ids:
+                            _log("ORCH", "DAG", "MISSING_DEP",
+                                 f"{a['agent_id']} depends on "
+                                 f"unknown agent {dep!r}", "R")
+                        else:
+                            _log("ORCH", "DAG", "UNMET_DEP",
+                                 f"{a['agent_id']} waiting "
+                                 f"for {dep!r}", "W")
+                raise RuntimeError(
+                    f"DAG deadlock: {len(pending)} agent(s) blocked — "
+                    "check logs for MISSING_DEP / UNMET_DEP details"
+                )
+
+            ready_ids = {a["agent_id"] for a in ready}
+            waiting = [a["agent_id"] for a in pending
+                       if a["agent_id"] not in ready_ids]
+
+            _log("ORCH", "DAG", "STATE",
+                 f"iteration={iteration} | "
+                 f"completed={sorted(completed)} | "
+                 f"waiting={waiting} | "
+                 f"ready={sorted(ready_ids)}", "B")
+
+            self._run_wave(
+                ready,
+                depth=0,
+                label=f"DAG iteration={iteration} "
+                f"— {len(ready)} agent(s)"
+            )
+
+            # Update state
+            completed.update(ready_ids)
+            pending = [a for a in pending
+                       if a["agent_id"] not in completed]
+
+            # Handle dynamic spawns — passes pending directly
+            self._handle_spawns(pending, completed)
+
+            iteration += 1
+        # ── end DAG loop ──────────────────────────────────────────────────
 
         if self.cfg["show_messages"]:
             print(f"\n{'═'*66}\n  AGENT COMMUNICATION LOG\n{'═'*66}\n")
@@ -1635,59 +1921,73 @@ class Orchestrator:
                 print(f"  {mt:15s} | {subj}\n")
 
         outputs = self.mem.all_outputs()
-        stats   = self.mem.stats()
+        stats = self.mem.stats()
         elapsed = round(time.time() - self.t0, 1)
-        rels    = self.mem.strong_relationships()
+        rels = self.mem.strong_relationships()
 
         print(f"\n{'═'*66}\n  FINAL OUTPUTS\n  {desc[:60]}\n{'═'*66}\n")
+
         def _show(v, pad=2):
             sp = " " * pad
             if isinstance(v, dict):
                 for k, vv in v.items():
                     if isinstance(vv, (dict, list)):
-                        print(f"{sp}{k}:"); _show(vv, pad+2)
+                        print(f"{sp}{k}:")
+                        _show(vv, pad + 2)
                     else:
                         val = str(vv)
                         if len(val) > 64:
                             print(f"{sp}{k}:")
-                            for line in textwrap.wrap(val, 60-pad):
+                            for line in textwrap.wrap(val, 60 - pad):
                                 print(f"{sp}  {line}")
                         else:
                             print(f"{sp}{k:22s}: {val}")
             elif isinstance(v, list):
                 for item in v:
                     if isinstance(item, dict):
-                        _show(item, pad); print()
+                        _show(item, pad)
+                        print()
                     else:
                         print(f"{sp}• {item}")
             else:
-                for line in textwrap.wrap(str(v), 60-pad):
+                for line in textwrap.wrap(str(v), 60 - pad):
                     print(f"{sp}{line}")
 
         for agent_id, result in outputs.items():
             info = self.mem.agent_info(agent_id)
-            q    = info.get("quality", 0)
-            d    = info.get("drift", 0)
-            flag = " ⚠️" if (q < self.cfg["quality_min"] or
-                              d < self.cfg["drift_warn"]) else ""
+            q = info.get("quality", 0)
+            d = info.get("drift",   0)
+            flag = (" ⚠️" if (q < self.cfg["quality_min"] or
+                              d < self.cfg["drift_warn"]) else "")
             print(f"{'─'*66}")
-            print(f"  {agent_id.upper().replace('_',' ')}{flag}")
+            print(f"  {agent_id.upper().replace('_', ' ')}{flag}")
             print(f"  quality={q:.2f}  drift={d:.2f}")
             print(f"{'─'*66}")
-            _show(result); print()
+            _show(result)
+            print()
 
         print(f"{'═'*66}\n  EXECUTION SUMMARY\n{'─'*66}")
-        print(f"  Agents         : {stats['agents']} ({stats['success']} ok, {stats['failed']} failed)")
-        print(f"  Quality / Drift: {stats['avg_quality']:.2f} / {stats['avg_drift']:.2f}")
+        print(f"  Agents         : {stats['agents']} "
+              f"({stats['success']} ok, {stats['failed']} failed)")
+        print(f"  Quality / Drift: "
+              f"{stats['avg_quality']:.2f} / {stats['avg_drift']:.2f}")
         print(f"  Messages       : {stats['messages']}")
-        print(f"  Spawns         : {stats['spawns']} ({stats['spawn_rejected']} rejected)")
+        print(f"  Spawns         : {stats['spawns']} "
+              f"({stats['spawn_rejected']} rejected)")
         print(f"  Fossils        : {stats['fossils']}")
         print(f"  Guard blocks   : {stats['guardrail_blocked']}")
-        print(f"  Tokens used    : {_tokens_used:,}/{self.cfg['token_budget']:,}")
+        print(f"  Tokens used    : "
+              f"{_tokens_used:,}/{self.cfg['token_budget']:,}")
         print(f"  Wall time      : {elapsed}s")
         if rels:
             print(f"{'─'*66}\n  AGENT RELATIONSHIPS")
             for r in rels[:3]:
-                print(f"    {r['a']} ↔ {r['b']}  avg={r['avg']}  runs={r['runs']}")
+                print(f"    {r['a']} ↔ {r['b']}  "
+                      f"avg={r['avg']}  runs={r['runs']}")
         print(f"{'═'*66}\n")
+
+        # Print intent alignment report
+        if self.intent is not None:
+            self.intent.print_report()
+
         return outputs
