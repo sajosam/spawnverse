@@ -167,6 +167,7 @@ Enforced at code-generation time **and** at the database layer.
 ```
 Every agent that runs leaves a fossil when it dies:
   agent_id · role · task_summary
+  # task_summary is truncated to 500 chars to preserve meaningful context
   constitution  (the code that defined this agent)
   quality_score (0-1: how good was the output?)
   intent_score  (0-1: how close to the original task?)

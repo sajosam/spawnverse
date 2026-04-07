@@ -386,7 +386,7 @@ class DistributedMemory:
                 "(agent_id,role,task_summary,constitution,"
                 "quality,drift,tokens,runtime,depth,died_at) "
                 "VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (agent_id, role, task_summary[:200],
+                (agent_id, role, task_summary[:500],
                  constitution[:2000], quality, drift,
                  tokens, runtime, depth,
                  datetime.now().isoformat()))
@@ -1703,7 +1703,7 @@ class Orchestrator:
         constitution = (self.consts.get(aid) or "")[:2000]
 
         self.mem.deposit_fossil(
-            aid, spec["role"], spec["task"][:200],
+            aid, spec["role"], spec["task"][:500],
             constitution,
             quality_score, drift_score, gen_tokens, elapsed, depth)
 
