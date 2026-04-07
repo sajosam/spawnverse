@@ -1552,10 +1552,20 @@ class IntentTracker:
 # ══════════════════════════════════════════════════════════════════════
 
 
-class Orchestrator:
-
-    def __init__(self, config=None):
+def __init__(self, config=None):
         self.cfg = {**DEFAULT_CONFIG, **(config or {})}
+
+        # --- INSERT THE CHECK HERE ---
+        # Early API key check — fail fast before any work starts
+        if not os.environ.get("GROQ_API_KEY", "").strip():
+            raise EnvironmentError(
+                "\n[SpawnVerse] GROQ_API_KEY is not set.\n"
+                "  Export it before running:\n"
+                "    export GROQ_API_KEY=gsk_your_key_here\n"
+                "  Get a free key at: https://console.groq.com"
+            )
+        # -----------------------------
+
         self.client = _make_client(self.cfg)
         self.mem = DistributedMemory(self.cfg)
         self.vdb = VectorDB(self.cfg)
