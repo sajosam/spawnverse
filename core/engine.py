@@ -559,7 +559,7 @@ class DistributedMemory:
         ]        
 # ══════════════════════════════════════════════════════════════════════
 #  VECTOR DB
-# ══════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════
 
 
 class VectorDB:
@@ -1552,19 +1552,17 @@ class IntentTracker:
 # ══════════════════════════════════════════════════════════════════════
 
 
-def __init__(self, config=None):
+class Orchestrator:
+
+    def __init__(self, config=None):
         self.cfg = {**DEFAULT_CONFIG, **(config or {})}
 
-        # --- INSERT THE CHECK HERE ---
-        # Early API key check — fail fast before any work starts
-        if not os.environ.get("GROQ_API_KEY", "").strip():
+        if not os.environ.get("GROQ_API_KEY"):
             raise EnvironmentError(
-                "\n[SpawnVerse] GROQ_API_KEY is not set.\n"
-                "  Export it before running:\n"
-                "    export GROQ_API_KEY=gsk_your_key_here\n"
-                "  Get a free key at: https://console.groq.com"
+                "GROQ_API_KEY is not set. Please export it before running:\n\n"
+                "    export GROQ_API_KEY=your_key_here\n\n"
+                "Get your key at: https://console.groq.com/keys"
             )
-        # -----------------------------
 
         self.client = _make_client(self.cfg)
         self.mem = DistributedMemory(self.cfg)
