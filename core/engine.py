@@ -559,7 +559,7 @@ class DistributedMemory:
         ]        
 # ══════════════════════════════════════════════════════════════════════
 #  VECTOR DB
-# ══════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════
 
 
 class VectorDB:
@@ -1556,6 +1556,14 @@ class Orchestrator:
 
     def __init__(self, config=None):
         self.cfg = {**DEFAULT_CONFIG, **(config or {})}
+
+        if not os.environ.get("GROQ_API_KEY"):
+            raise EnvironmentError(
+                "GROQ_API_KEY is not set. Please export it before running:\n\n"
+                "    export GROQ_API_KEY=your_key_here\n\n"
+                "Get your key at: https://console.groq.com/keys"
+            )
+
         self.client = _make_client(self.cfg)
         self.mem = DistributedMemory(self.cfg)
         self.vdb = VectorDB(self.cfg)
