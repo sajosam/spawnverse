@@ -11,8 +11,8 @@ Run:
     python run.py
 """
 import sys, os, shutil
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
-from spawnverse.core.engine import Orchestrator, DEFAULT_CONFIG
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
+from spawnverse import Orchestrator, DEFAULT_CONFIG
 
 os.environ["GROQ_API_KEY"] = ""
 

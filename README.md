@@ -497,6 +497,48 @@ spawnverse/
 
 ---
 
+## Production Readiness
+
+**Status: Alpha (v0.1.0) — Not Production Ready**
+
+SpawnVerse is currently in alpha and is suitable for prototyping, research, and experimental use. The following table outlines what is production-ready versus what needs work:
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Self-spawning agents | ✅ Stable | Core architecture tested across multiple use cases |
+| Distributed memory (SQLite) | ✅ Stable | WAL mode handles concurrent writes reliably |
+| Guardrails (4-layer) | ✅ Stable | Code scanning, budget enforcement, output validation active |
+| DAG execution | ⚠️ Partial | Wave-based scheduling works; dependency-driven execution planned |
+| Model routing (UCB1) | ✅ Stable | Bandit-based model selection optimizes cost vs quality |
+| Soul system | ✅ Stable | Persistent agent identity across runs |
+| **Multi-provider support** | ❌ Incomplete | Only Groq fully implemented; OpenAI/Anthropic/Ollama stubs exist |
+| **Docker sandbox** | ❌ Missing | Subprocess with OS limits (Unix only); Windows runs without isolation |
+| **Test coverage** | ❌ Missing | No unit tests; rely on example runs for validation |
+| **Structured logging** | ❌ Missing | Console output only; no metrics export or observability hooks |
+
+### Known Limitations
+
+1. **Security**: Agent code runs in subprocess without container isolation on Windows
+2. **Error recovery**: LLM failures and subprocess crashes need graceful degradation improvements
+3. **Rate limiting**: Basic retry logic; no circuit breakers for production load
+4. **Observability**: No tracing, metrics, or structured logging for production monitoring
+
+### Recommendation
+
+Use SpawnVerse for:
+- ✓ Prototyping agent workflows
+- ✓ Research and experimentation
+- ✓ Low-risk automation tasks
+- ✓ Exploring self-spawning agent patterns
+
+Wait for v0.3+ before:
+- ✗ High-availability production services
+- ✗ Processing sensitive/personal data at scale
+- ✗ Multi-tenant deployments
+- ✗ Unattended 24/7 operation
+
+---
+
 ## Roadmap
 
 ### v0.2
