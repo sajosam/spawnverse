@@ -1,6 +1,8 @@
 from setuptools import setup, find_packages
+
 with open("README.md", encoding="utf-8") as f:
     long_desc = f.read()
+
 setup(
     name             = "spawnverse",
     version          = "0.1.0",
@@ -9,7 +11,7 @@ setup(
     long_description = long_desc,
     long_description_content_type = "text/markdown",
     url              = "https://github.com/sajosam/spawnverse",
-    packages         = find_packages(),
+    packages         = find_packages(exclude=["examples*", "ev*", "docs*"]),
     python_requires  = ">=3.10",
     install_requires = ["groq>=1.1.0"],
     extras_require   = {
@@ -26,6 +28,6 @@ setup(
         "ai agents", "autonomous agents", "multi-agent systems",
         "self-spawning agents", "agentic ai", "llm orchestration",
         "agent framework", "groq", "llama", "distributed memory",
-        "cognitive architecture", "agent spawning",
+        "cognitive architecture",
     ],
 )
